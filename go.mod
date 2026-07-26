@@ -1,6 +1,6 @@
 module github.com/paxlabs-inc/ion-agent
 
-go 1.22.0
+go 1.25.0
 
 toolchain go1.26.5
 
@@ -14,7 +14,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	golang.org/x/crypto v0.28.0
-	golang.org/x/sys v0.26.0
+	golang.org/x/sys v0.47.0
 	lukechampine.com/blake3 v1.3.0
 	modernc.org/sqlite v1.33.0
 )
