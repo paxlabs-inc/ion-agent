@@ -60,7 +60,7 @@ jobs:
           ( cd dist && sha256sum "${OUT}.tar.gz" > "${OUT}.tar.gz.sha256" )
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ion-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*.tar.gz*
