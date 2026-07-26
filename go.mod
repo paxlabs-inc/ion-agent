@@ -15,7 +15,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	golang.org/x/crypto v0.28.0
 	golang.org/x/sys v0.26.0
-	lukechampine.com/blake3 v1.3.0
+	lukechampine.com/blake3 v1.4.1
 	modernc.org/sqlite v1.33.0
 )
 
