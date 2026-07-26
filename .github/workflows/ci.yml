@@ -89,7 +89,7 @@ jobs:
           check_package ./internal/agent 76
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: coverage.out
           flags: unit
