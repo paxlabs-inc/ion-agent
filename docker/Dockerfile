@@ -15,7 +15,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: operator client artifacts
 # ------------------------------------------------------------------------------
-FROM node:22.22-bookworm AS web
+FROM node:26.5-bookworm AS web
 
 WORKDIR /src/ui
 COPY ui/package.json ui/package-lock.json ./
