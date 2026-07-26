@@ -7,7 +7,7 @@ toolchain go1.26.5
 require (
 	github.com/chromedp/cdproto v0.0.0-20240801214329-3f85d328b335
 	github.com/chromedp/chromedp v0.10.0
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/emersion/go-imap v1.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
