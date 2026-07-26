@@ -10,7 +10,7 @@ description = "Ion HNSW vector search microservice"
 # USearch 2.12 is contemporary with the project's Rust 1.78 baseline. Pinning
 # cxx keeps transitive build tooling within that same MSRV.
 cxx = "=1.0.122"
-usearch = "=2.12.0"
+usearch = "=2.18.0"
 
 [build-dependencies]
 cxx-build = "=1.0.122"
