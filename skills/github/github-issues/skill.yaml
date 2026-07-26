@@ -1,0 +1,127 @@
+skill:
+  name: github-issues
+  version: 1.1.0
+  summary: Create, triage, label, assign GitHub issues via gh or REST
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [github issues, issue tracker, bug report, triage, issue management]
+  intents: [create_issue, list_issues, search_issues, triage_issues, manage_issues]
+  patterns:
+    - "(create|open|file) .*(issue|bug|ticket)"
+    - "(list|show|view|search) .*(issues|tickets)"
+    - "(triage|label|assign|close|reopen) .*(issue|ticket)"
+    - "gh issue"
+
+requires:
+  env_any: [GITHUB_TOKEN]
+  binaries: [git]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [issue_management, issue_triage, issue_bulk_operations]
+  output_types: []
+
+actions:
+
+  view_issues:
+    description: List, view, or search GitHub issues
+    trigger_phrases: ["list issues", "show issues", "view issue", "search issues"]
+    rules:
+      - priority: HIGH
+        text: "gh: gh issue list [--state open] [--label 'bug'] [--assignee @me] [--search '...']"
+      - priority: HIGH
+        text: "curl: GET /repos/{o}/{r}/issues?state=open&labels=bug&per_page=20"
+      - priority: HIGH
+        text: "GitHub API returns PRs in /issues endpoint — filter with: if 'pull_request' not in item"
+      - priority: NORMAL
+        text: "Search: GET /search/issues?q=query+repo:owner/repo"
+
+  create_issue:
+    description: Create a new GitHub issue
+    trigger_phrases: ["create issue", "file a bug", "open an issue", "new issue"]
+    rules:
+      - priority: HIGH
+        text: "gh: gh issue create --title '...' --body '...' --label 'bug,backend' --assignee 'user'"
+      - priority: HIGH
+        text: "curl: POST /repos/{o}/{r}/issues with title, body, labels[], assignees[]"
+      - priority: NORMAL
+        text: "Use templates: Bug Description → Steps to Reproduce → Expected/Actual → Environment"
+      - priority: NORMAL
+        text: "Feature Request: Description → Motivation → Proposed Solution → Alternatives"
+
+    examples:
+      - label: "create issue with gh"
+        language: bash
+        code: |
+          gh issue create \
+            --title "Login redirect ignores ?next= parameter" \
+            --body "## Description\nAfter logging in, users always land on /dashboard." \
+            --label "bug,backend" \
+            --assignee "username"
+
+  manage_issues:
+    description: Label, assign, comment on, close, or reopen issues
+    trigger_phrases: ["label issue", "assign issue", "close issue", "comment on issue"]
+    rules:
+      - priority: HIGH
+        text: "Labels: gh issue edit N --add-label/--remove-label. curl: POST/DELETE /issues/N/labels"
+      - priority: HIGH
+        text: "Assign: gh issue edit N --add-assignee user. curl: POST /issues/N/assignees"
+      - priority: HIGH
+        text: "Close: gh issue close N. curl: PATCH /issues/N with state='closed'"
+      - priority: NORMAL
+        text: "Auto-close via PR: include 'Closes #N' or 'Fixes #N' in PR body"
+
+    data:
+      - key: quick_reference
+        map_value:
+          entries:
+            list: { string_value: "gh issue list | GET /repos/{o}/{r}/issues" }
+            view: { string_value: "gh issue view N | GET /repos/{o}/{r}/issues/N" }
+            create: { string_value: "gh issue create | POST /repos/{o}/{r}/issues" }
+            add_labels: { string_value: "gh issue edit N --add-label | POST /repos/{o}/{r}/issues/N/labels" }
+            assign: { string_value: "gh issue edit N --add-assignee | POST /repos/{o}/{r}/issues/N/assignees" }
+            comment: { string_value: "gh issue comment N | POST /repos/{o}/{r}/issues/N/comments" }
+            close: { string_value: "gh issue close N | PATCH /repos/{o}/{r}/issues/N" }
+            search: { string_value: "gh issue list --search | GET /search/issues?q=..." }
+
+  triage_issues:
+    description: Triage workflow — categorize, label, and assign untriaged issues
+    trigger_phrases: ["triage issues", "triage backlog", "sort issues"]
+    rules:
+      - priority: HIGH
+        text: "Step 1: List untriaged issues (label:needs-triage, state:open)"
+      - priority: HIGH
+        text: "Step 2: Read each issue, categorize by type and severity"
+      - priority: HIGH
+        text: "Step 3: Apply labels (bug/feature/enhancement + priority)"
+      - priority: NORMAL
+        text: "Step 4: Assign if owner is clear, comment with triage notes if needed"
+
+  bulk_operations:
+    description: Batch operations on multiple issues
+    trigger_phrases: ["bulk close issues", "batch update issues"]
+    rules:
+      - priority: HIGH
+        text: "Combine gh issue list --json number --jq with xargs for batch operations"
+      - priority: NORMAL
+        text: "curl: list issues → extract numbers → loop PATCH to close each"
+
+guardrails:
+  - text: "Filter out PRs from /issues results — GitHub mixes them together"
+    scope: ALWAYS
+  - text: "Never bulk-close without user confirmation on the list of affected issues"
+    scope: WRITE_OPS
+
+related:
+  - name: github-auth
+    relationship: composes_with
+    description: Authentication required
+  - name: github-pr-workflow
+    relationship: composes_with
+    description: Issues link to PRs via Closes/Fixes keywords

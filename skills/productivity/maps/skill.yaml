@@ -1,0 +1,182 @@
+skill:
+  name: maps
+  version: 1.2.0
+  summary: Geocode, POIs, routes, timezones via OpenStreetMap/OSRM
+  author: Mibayy
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [maps, geocode, nearby, directions, distance, routing, places, location, coordinates, latitude, longitude, overpass, nominatim, osrm, timezone]
+  intents: [geocode, reverse_geocode, find_nearby, get_distance, get_directions, get_timezone, get_area, bbox_search]
+  patterns:
+    - "(find|search|show) .*(nearby|near|around|close to)"
+    - "(directions|navigate|route) .*(to|from)"
+    - "(distance|how far|travel time) .*(to|from|between)"
+    - "(geocode|coordinates|location) .*(of|for)"
+    - "(timezone|time zone) .*(of|for|at)"
+    - "(what|where) .*(near|around|close)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [python3]
+
+provides:
+  capabilities: [geocoding, reverse_geocoding, nearby_pois, distance_matrix, turn_by_turn_directions, timezone_lookup, bounding_box_search]
+  output_types: [.json]
+
+actions:
+
+  search:
+    description: Geocode a place name to coordinates
+    trigger_phrases: ["find coordinates", "geocode", "where is", "location of"]
+    rules:
+      - priority: HIGH
+        text: "Returns lat, lon, display name, type, bounding box, importance score"
+      - priority: NORMAL
+        text: "Uses Nominatim (OpenStreetMap) — max 1 req/s handled automatically"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS search \"PLACE NAME\""
+    examples:
+      - label: "geocode a landmark"
+        language: bash
+        code: "python3 $MAPS search \"Eiffel Tower\""
+
+  reverse:
+    description: Convert coordinates to a street address
+    trigger_phrases: ["reverse geocode", "address for coordinates", "what's at this location"]
+    rules:
+      - priority: HIGH
+        text: "Returns full address breakdown: street, city, state, country, postcode"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS reverse LAT LON"
+    examples:
+      - label: "reverse geocode coordinates"
+        language: bash
+        code: "python3 $MAPS reverse 48.8584 2.2945"
+
+  nearby:
+    description: Find places by category near a location
+    trigger_phrases: ["find nearby", "restaurants near", "hospitals around", "what's nearby", "nearby cafes"]
+    rules:
+      - priority: HIGH
+        text: "Accepts lat/lon OR --near \"address\" for auto-geocoding"
+      - priority: HIGH
+        text: "Multiple --category flags merge into one query"
+      - priority: NORMAL
+        text: "Results include: name, address, lat/lon, distance_m, maps_url, directions_url, and tags (cuisine, hours, phone, website)"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS nearby [LAT LON | --near \"PLACE\"] --category CAT [--radius M] [--limit N]"
+      - key: categories
+        list_value:
+          items:
+            - { string_value: restaurant }
+            - { string_value: cafe }
+            - { string_value: bar }
+            - { string_value: hospital }
+            - { string_value: pharmacy }
+            - { string_value: hotel }
+            - { string_value: supermarket }
+            - { string_value: atm }
+            - { string_value: gas_station }
+            - { string_value: museum }
+            - { string_value: park }
+            - { string_value: airport }
+            - { string_value: train_station }
+    examples:
+      - label: "find restaurants near a landmark"
+        language: bash
+        code: "python3 $MAPS nearby --near \"Colosseum Rome\" --category restaurant --radius 500"
+      - label: "find cafes from coordinates"
+        language: bash
+        code: "python3 $MAPS nearby 48.8584 2.2945 cafe --limit 10"
+
+  distance:
+    description: Calculate travel distance and time between two places
+    trigger_phrases: ["how far", "distance to", "travel time", "how long to get"]
+    rules:
+      - priority: HIGH
+        text: "Modes: driving (default), walking, cycling"
+      - priority: HIGH
+        text: "Returns road distance, duration, and straight-line distance"
+      - priority: NORMAL
+        text: "Uses OSRM — best coverage for Europe and North America"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS distance \"ORIGIN\" --to \"DESTINATION\" [--mode driving|walking|cycling]"
+    examples:
+      - label: "driving distance between cities"
+        language: bash
+        code: "python3 $MAPS distance \"Paris\" --to \"Lyon\""
+
+  directions:
+    description: Turn-by-turn navigation between two places
+    trigger_phrases: ["directions to", "how to get to", "navigate to", "route to"]
+    rules:
+      - priority: HIGH
+        text: "Returns numbered steps with instruction, distance, duration, road name, and maneuver type"
+      - priority: NORMAL
+        text: "Modes: driving (default), walking, cycling"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS directions \"ORIGIN\" --to \"DESTINATION\" [--mode walking|driving|cycling]"
+    examples:
+      - label: "walking directions"
+        language: bash
+        code: "python3 $MAPS directions \"Eiffel Tower\" --to \"Louvre Museum\" --mode walking"
+
+  timezone:
+    description: Get timezone information for coordinates
+    trigger_phrases: ["timezone for", "what time zone", "local time at"]
+    rules:
+      - priority: HIGH
+        text: "Returns timezone name, UTC offset, and current local time"
+    data:
+      - key: command_pattern
+        string_value: "python3 $MAPS timezone LAT LON"
+    examples:
+      - label: "timezone for Tokyo"
+        language: bash
+        code: "python3 $MAPS timezone 35.6762 139.6503"
+
+  area_bbox:
+    description: Get bounding box for a place or search POIs within a bbox
+    trigger_phrases: ["bounding box", "area of", "search within area"]
+    rules:
+      - priority: HIGH
+        text: "area returns bbox coordinates, width/height in km, approximate area"
+      - priority: HIGH
+        text: "bbox finds POIs within a geographic rectangle — use area first to get coordinates"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            area: { string_value: "python3 $MAPS area \"PLACE NAME\"" }
+            bbox: { string_value: "python3 $MAPS bbox SOUTH WEST NORTH EAST CATEGORY [--limit N]" }
+    examples:
+      - label: "get area bounding box"
+        language: bash
+        code: "python3 $MAPS area \"Manhattan, New York\""
+      - label: "search within bounding box"
+        language: bash
+        code: "python3 $MAPS bbox 40.75 -74.00 40.77 -73.98 restaurant --limit 20"
+
+guardrails:
+  - text: "Nominatim rate limit: max 1 req/s — handled automatically by script"
+    scope: ALWAYS
+  - text: "OSRM routing coverage best for Europe and North America"
+    scope: ALWAYS
+  - text: "Overpass API can be slow during peak hours — script auto-falls back between mirrors"
+    scope: ALWAYS
+  - text: "For 'open now?' questions, check hours field; if missing, verify with web_search since OSM hours are community-maintained"
+    scope: READ_OPS
+
+related:
+  - name: find-nearby
+    relationship: alternative_to
+    description: Superseded by maps skill — all find-nearby features handled by nearby command

@@ -1,0 +1,126 @@
+skill:
+  name: excalidraw
+  version: 1.0.0
+  summary: Hand-drawn Excalidraw JSON diagrams (arch, flow, seq)
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [excalidraw, diagram, flowchart, architecture diagram, sequence diagram]
+  intents: [create_diagram, draw_flowchart, draw_architecture, draw_sequence]
+  patterns:
+    - "(draw|create|make) .*(diagram|flowchart|arch|sequence)"
+    - "excalidraw"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [excalidraw_diagrams]
+  output_types: [.excalidraw]
+
+actions:
+
+  create_diagram:
+    description: User wants to create an Excalidraw diagram
+    trigger_phrases: ["create a diagram", "draw a flowchart", "make an architecture diagram"]
+    rules:
+      - priority: CRITICAL
+        text: "Output is a .excalidraw JSON file — no rendering library needed"
+      - priority: CRITICAL
+        text: "Never use 'label' property on shapes — use container binding (boundElements + containerId)"
+      - priority: CRITICAL
+        text: "Always include fontFamily: 1 on text elements (Virgil hand-drawn font)"
+      - priority: HIGH
+        text: "Wrap elements in the excalidraw envelope: {type:'excalidraw', version:2, source:'ion-agent', elements:[], appState:{viewBackgroundColor:'#ffffff'}}"
+      - priority: HIGH
+        text: "Array order = z-order. Emit: background zones → shape → its bound text → its arrows → next shape"
+      - priority: HIGH
+        text: "Minimum fontSize: 16 for body, 20 for titles, 14 for annotations. Never below 14"
+      - priority: HIGH
+        text: "Minimum shape size: 120x60 for labeled shapes. Leave 20-30px gaps between elements"
+      - priority: NORMAL
+        text: "Use color palette consistently: Primary=#a5d8ff, Success=#b2f2bb, Warning=#ffd8a8, Processing=#d0bfff, Error=#ffc9c9, Notes=#fff3bf, Storage=#c3fae8"
+      - priority: NORMAL
+        text: "Text contrast is critical — never light gray on white. Min text color on white: #757575"
+      - priority: NORMAL
+        text: "No emoji in text — they don't render in Excalidraw's font"
+
+    data:
+      - key: envelope_template
+        map_value:
+          entries:
+            type: { string_value: excalidraw }
+            version: { int_value: 2 }
+            source: { string_value: ion-agent }
+            appState: { string_value: "{'viewBackgroundColor':'#ffffff'}" }
+
+      - key: element_types
+        list_value:
+          items: [{ string_value: rectangle }, { string_value: ellipse }, { string_value: diamond }, { string_value: text }, { string_value: arrow }]
+
+      - key: color_palette
+        map_value:
+          entries:
+            primary: { string_value: "#a5d8ff" }
+            success: { string_value: "#b2f2bb" }
+            warning: { string_value: "#ffd8a8" }
+            processing: { string_value: "#d0bfff" }
+            error: { string_value: "#ffc9c9" }
+            notes: { string_value: "#fff3bf" }
+            storage: { string_value: "#c3fae8" }
+
+      - key: arrow_head_types
+        list_value:
+          items: [{ string_value: arrow }, { string_value: bar }, { string_value: dot }, { string_value: triangle }]
+
+      - key: fixed_point_presets
+        map_value:
+          entries:
+            top: { string_value: "[0.5, 0]" }
+            bottom: { string_value: "[0.5, 1]" }
+            left: { string_value: "[0, 0.5]" }
+            right: { string_value: "[1, 0.5]" }
+
+    examples:
+      - label: "labeled rectangle with container binding"
+        language: json
+        code: |
+          {"type":"rectangle","id":"r1","x":100,"y":100,"width":200,"height":80,
+           "roundness":{"type":3},"backgroundColor":"#a5d8ff","fillStyle":"solid",
+           "boundElements":[{"id":"t_r1","type":"text"}]}
+          {"type":"text","id":"t_r1","x":105,"y":110,"width":190,"height":25,
+           "text":"Hello","fontSize":20,"fontFamily":1,"strokeColor":"#1e1e1e",
+           "textAlign":"center","verticalAlign":"middle",
+           "containerId":"r1","originalText":"Hello","autoResize":true}
+
+      - label: "arrow connecting two shapes"
+        language: json
+        code: |
+          {"type":"arrow","id":"a1","x":300,"y":150,"width":150,"height":0,
+           "points":[[0,0],[150,0]],"endArrowhead":"arrow",
+           "startBinding":{"elementId":"r1","fixedPoint":[1,0.5]},
+           "endBinding":{"elementId":"r2","fixedPoint":[0,0.5]}}
+
+  upload_diagram:
+    description: User wants to upload an excalidraw file for a shareable link
+    trigger_phrases: ["upload diagram", "share diagram", "shareable link"]
+    rules:
+      - priority: HIGH
+        text: "Run scripts/upload.py via terminal. Requires cryptography pip package"
+    data:
+      - key: upload_command
+        string_value: "python skills/diagramming/excalidraw/scripts/upload.py <file.excalidraw>"
+
+guardrails:
+  - text: "Never use 'label' property on shapes — always use container binding pattern"
+    scope: ALWAYS
+  - text: "Save as .excalidraw file via write_file"
+    scope: ALWAYS
+
+related: []

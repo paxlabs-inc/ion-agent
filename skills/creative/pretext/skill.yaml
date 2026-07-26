@@ -1,0 +1,112 @@
+skill:
+  name: pretext
+  version: 1.0.0
+  summary: "Creative browser demos with @chenglou/pretext — DOM-free text layout for ASCII art, kinetic typography, text-as-geometry"
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [pretext, text layout, ascii art, kinetic typography, text-as-geometry, text reflow, chenglou]
+  intents: [create_pretext_demo, text_reflow, ascii_typography, kinetic_type_demo]
+  patterns:
+    - "pretext"
+    - "(text|ascii) .*(reflow|flow around|obstacle)"
+    - "kinetic typography"
+    - "text-as-(geometry|game)"
+    - "(shrink-wrap|multiline) .*(text|ui)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [text_reflow_demos, ascii_typography, kinetic_type, text_geometry_games]
+  output_types: [.html]
+
+actions:
+
+  build_pretext_demo:
+    description: Build a creative demo using @chenglou/pretext library
+    trigger_phrases: ["build pretext demo", "create text reflow", "pretext creative demo"]
+    rules:
+      - priority: CRITICAL
+        text: "Single self-contained HTML file. Import from esm.sh with pinned version: @chenglou/pretext@0.0.6."
+      - priority: CRITICAL
+        text: "Don't ship a hello world — add intentional color, motion, composition, and one extra detail."
+      - priority: CRITICAL
+        text: "Dark backgrounds, warm cores, considered palette. Never default white canvas."
+      - priority: HIGH
+        text: "Proportional fonts are the point — lean into it. Never default sans or monospace."
+      - priority: HIGH
+        text: "Real source text, not lorem ipsum. Short manifestos, poetry, real code, found text."
+      - priority: HIGH
+        text: "First-paint excellence — no loading states, no blank frames. Must look shippable instantly."
+      - priority: NORMAL
+        text: "Keep font string passed to prepare() exactly matching CSS font — drift causes measurement errors."
+    data:
+      - key: cdn_import
+        string_value: "https://esm.sh/@chenglou/pretext@0.0.6"
+      - key: demo_patterns
+        map_value:
+          entries:
+            reflow_around_obstacle: { string_value: "layoutNextLineRange + per-row width function" }
+            text_as_geometry_game: { string_value: "layoutWithLines + per-line collision rects" }
+            shatter_particles: { string_value: "walkLineRanges → per-grapheme (x,y) → physics" }
+            ascii_obstacle_typography: { string_value: "layoutNextLineRange + measured per-row obstacle spans" }
+            editorial_multicolumn: { string_value: "layoutNextLineRange per column + shared cursor" }
+            kinetic_type: { string_value: "layoutWithLines + per-line transform over time" }
+            multiline_shrinkwrap: { string_value: "measureLineStats" }
+    examples:
+      - label: "basic import and measure"
+        language: javascript
+        code: |
+          import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLineRange, materializeLineRange } from "https://esm.sh/@chenglou/pretext@0.0.6";
+          // Use-case 1: measure height
+          const prepared = prepare(text, "16px Inter");
+          const { height, lineCount } = layout(prepared, 320, 20);
+          // Use-case 2: measure and render yourself
+          const prepared2 = prepareWithSegments(text, "16px Inter");
+          const { lines } = layoutWithLines(prepared2, 320, 26);
+          for (let i = 0; i < lines.length; i++) { ctx.fillText(lines[i].text, 0, i * 26); }
+
+  variable_width_reflow:
+    description: Flow text around a moving shape with variable width per line
+    trigger_phrases: ["text around shape", "reflow around obstacle", "variable width text"]
+    rules:
+      - priority: CRITICAL
+        text: "Most important pattern: use layoutNextLineRange with a widthAtY(y) function for variable-width corridors."
+      - priority: HIGH
+        text: "If corridor too narrow for a line, skip the row (y += lineHeight; continue) not passing tiny maxWidth."
+      - priority: HIGH
+        text: "prepare() is expensive — call once per text+font pair. Only layout* is cheap enough for per-frame."
+      - priority: NORMAL
+        text: "Canvas ctx.font setting is slow — set once per frame if font doesn't vary."
+    examples:
+      - label: "variable width reflow loop"
+        language: javascript
+        code: |
+          let cursor = { segmentIndex: 0, graphemeIndex: 0 };
+          let y = 0;
+          while (true) {
+            const lineWidth = widthAtY(y);
+            const range = layoutNextLineRange(prepared, cursor, lineWidth);
+            if (!range) break;
+            const line = materializeLineRange(prepared, range);
+            ctx.fillText(line.text, leftEdgeAtY(y), y);
+            cursor = range.end;
+            y += lineHeight;
+          }
+
+guardrails:
+  - text: "Use esm.sh for import — unpkg will 404 or serve raw TS"
+    scope: ALWAYS
+  - text: "Never re-prepare inside animation loop — only layout* is cheap"
+    scope: ALWAYS
+  - text: "Use Intl.Segmenter for grapheme splits — .split('') breaks emoji/CJK"
+    scope: ALWAYS
+
+related: []

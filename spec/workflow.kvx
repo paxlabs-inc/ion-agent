@@ -1,0 +1,75 @@
+# workflow.kvx — the PORTABLE, IDE-neutral agent operating contract.
+#
+# This is the single source of truth for HOW an agent works an Ion spec,
+# across every IDE (Cursor, Devin, Claude Code, Kiro, Codex, Copilot, ...).
+# The per-IDE rule files (.cursor/rules, .devin, CLAUDE.md, AGENTS.md, ...)
+# are GENERATED from this file by spec/specgen — never hand-edit them.
+#
+# Format: sectioned KV per the Ion .kvx convention (see
+# tachyon/internal/config/kvx.go). String values are ALWAYS double-quoted.
+#   [section] / [section.sub]   key = "string"   num = 80   list = ["a","b"]
+# Comments start with # outside quotes. One key = value per line.
+
+[meta]
+name            = "Ion Spec Workflow"
+kind            = "portable-agent-operating-contract"
+version         = "1.0.0"
+status          = "active"
+source_of_truth = "spec/ (kvx). Per-IDE rule files are GENERATED pointers — never hand-edit; run spec/specgen to regenerate."
+active_feature  = "ion_spec"
+
+[principle]
+recall_first    = "Before substantive work, load relevant project memory or prior context when the configured memory integration is available; treat hard rules and current user direction as authoritative."
+ground_truth    = "Persistent project memory carries context across sessions; the active spec.kvx is the durable feature plan; the context window is a disposable cache."
+task_driven     = "Work is driven by the active feature's spec.kvx task list — not ad-hoc. Pick the next eligible task by dependency wave, do it, mark it, move on."
+one_in_progress = "At most ONE task is in_progress at a time. Set it to in_progress before starting, to done only when it genuinely meets the bar."
+no_false_success= "Never mark a task done or attest completion that did not happen. Surface honest partials. A green test driven by a fake is not done."
+read_full       = "When a tool output is flagged truncated/paginated with a way to get the rest, retrieve the full content before reasoning. An information gap is a stop condition."
+deliver_complete= "Deliver complete, runnable artifacts, not diffs. Follow existing repo style; add no comments/docs unless asked."
+
+[loop]
+step_1 = "Load relevant project memory or prior context when available, including hard rules, preferences, and recent outcomes."
+step_2 = "Read spec/<active_feature>/spec.kvx — the [meta] status, [req.*] (acceptance criteria), and the [task.*] list with status + wave + requires."
+step_3 = "Select the next eligible task: lowest wave whose every 'requires' task is done and whose status is pending. Set its status to in_progress in spec.kvx."
+step_4 = "Before destructive, irreversible, production, secret, or network-write actions, use the configured guard integration when available and self-check against hard rules; stop for explicit user approval when required."
+step_5 = "Implement the task against its referenced acceptance criteria (the 'reqs' clause ids in [req.*]). Verify with real tests/checks, not fakes."
+step_6 = "On genuine completion, set the task status to done in spec.kvx and record a terse success, partial, or failure outcome in configured project memory when available."
+step_7 = "Persist durable decisions, constraints, facts, and preferences as they occur, then return to step 3 until all eligible tasks are done."
+
+[memory]
+recall       = "Load relevant project memory once at session start when the integration is available."
+search       = "Search memory with a narrow task-specific query when prior decisions or outcomes may affect the work."
+guard        = "Use the configured guard before destructive, irreversible, security-sensitive, or external-effect actions."
+note_outcome = "Record a terse success, partial, or failure outcome after completing a task."
+remember     = "Persist durable decisions, constraints, facts, and preferences when they are established."
+never        = "Never store secrets, tokens, keys, or environment values in project memory. Current user direction overrides recalled context."
+
+[status_values]
+task    = ["pending", "in_progress", "done"]
+feature = ["draft", "in_progress", "blocked", "complete"]
+
+# Hard rules are mirrored in-repo so every supported agent sees them.
+[hard_rules]
+task_durability = "Once a task is dispatched, keep at least one agent alive until it is done to the highest standard; decouple task lifecycle from the user's connection; on failure, bring up a fresh agent and continue. 'Done' means it genuinely meets the quality bar."
+no_fakes        = "Never write stub/mock/fake test doubles or placeholder implementations to make tests pass. Test REAL code paths with REAL types."
+read_full       = "When tool output is truncated and the rest is retrievable, fetch the full content before reasoning or answering."
+no_git          = "Do not git commit/push on the dev box; the user drives commits. Uncommitted/untracked state is expected — never flag it as a problem."
+ui_no_borders   = "Client UI: never use border strokes for depth/separation — separation comes purely from background-color contrast between layers."
+ui_no_emojis    = "No emojis, purple gradients, or glow effects in UI or output."
+
+# Generation config: which IDE adapter files specgen emits, and where the
+# human-readable markdown mirror is rendered. Paths are repo-relative.
+[render]
+markdown_mirror  = true   # render requirements.md / design.md / tasks.md from spec.kvx (into spec/<feature>/ only)
+mirror_to_kiro   = false  # NEVER write into .kiro/specs/<feature>/ — those are hand-authored sources, not generated output
+banner           = "GENERATED by spec/specgen from spec/ kvx — DO NOT EDIT. Edit the .kvx source and regenerate."
+
+[adapters]
+# label = "output path"   (specgen wraps the shared brief in each IDE's native shape)
+cursor            = ".cursor/rules/spec-workflow.mdc"
+devin_rules       = ".devin/rules/spec-workflow.md"
+devin_workflow    = ".devin/workflows/spec.md"
+claude            = "CLAUDE.md"
+codex             = "AGENTS.md"
+copilot           = ".github/copilot-instructions.md"
+kiro              = ".kiro/steering/spec-workflow.md"

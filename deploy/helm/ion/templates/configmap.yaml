@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ion.fullname" . }}-config
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+data:
+  ION_DATA_DIR: {{ .Values.ion.dataDir | quote }}
+  ION_WEB_LISTEN: {{ .Values.ion.listen | quote }}
+  ION_WEB_ORIGIN: {{ required "ion.origin is required" .Values.ion.origin | quote }}
+  ION_AUTO_INIT: {{ ternary "1" "0" .Values.ion.autoInit | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ion.fullname" . }}-proxy
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+data:
+  Caddyfile: |
+    :{{ .Values.proxy.port }} {
+      encode zstd gzip
+      reverse_proxy {{ .Values.ion.listen }} {
+        flush_interval -1
+      }
+      header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+      }
+      log {
+        output stdout
+        format console
+      }
+    }

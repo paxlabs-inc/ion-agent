@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ion
+
+commonLabels:
+  app.kubernetes.io/name: ion
+  app.kubernetes.io/part-of: ion
+  app.kubernetes.io/managed-by: kustomize
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - office-deployment.yaml
+
+images:
+  - name: ghcr.io/paxlabs-inc/ion-agent
+    newTag: latest

@@ -1,0 +1,142 @@
+skill:
+  name: heartmula
+  version: 1.0.0
+  summary: "HeartMuLa: Suno-like song generation from lyrics + tags"
+  author: community
+  license: Apache-2.0
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [heartmula, heartlib, heartcodec, music generation, song generation, text to music, ai music, lyrics to song]
+  intents: [generate_music, generate_song, create_song_from_lyrics]
+  patterns:
+    - "(generate|create|make) .*(music|song|track) .*(lyrics|text|tags)"
+    - "heartmula|heartlib|heartcodec"
+    - "(open.?source|alternative) .*(suno|music generation)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [git, python3, uv]
+
+provides:
+  capabilities: [music_generation, song_generation, lyrics_to_audio]
+  output_types: [.mp3, .wav]
+
+actions:
+
+  setup:
+    description: Install HeartMuLa and download model checkpoints
+    trigger_phrases: ["set up heartmula", "install heartmula", "get heartmula running"]
+    rules:
+      - priority: CRITICAL
+        text: "Python 3.10 required — use uv venv --python 3.10"
+      - priority: CRITICAL
+        text: "After pip install, upgrade datasets and transformers to fix dependency conflicts"
+      - priority: CRITICAL
+        text: "Apply two source patches: RoPE cache fix in modeling_heartmula.py and ignore_mismatched_sizes in music_generation.py"
+      - priority: HIGH
+        text: "Download three checkpoints: HeartMuLaGen, HeartMuLa-oss-3B, HeartCodec-oss (can run in parallel)"
+      - priority: HIGH
+        text: "Minimum 8GB VRAM with --lazy_load true; recommended 16GB+"
+      - priority: NORMAL
+        text: "No GPU? CPU mode works but expect 30-60+ minutes per song vs ~4 minutes on GPU"
+    data:
+      - key: clone_command
+        string_value: "git clone https://github.com/HeartMuLa/heartlib.git && cd heartlib"
+      - key: venv_setup
+        list_value:
+          items:
+            - { string_value: "uv venv --python 3.10 .venv" }
+            - { string_value: ". .venv/bin/activate" }
+            - { string_value: "uv pip install -e ." }
+            - { string_value: "uv pip install --upgrade datasets transformers" }
+      - key: checkpoint_downloads
+        list_value:
+          items:
+            - { string_value: "hf download --local-dir './ckpt' 'HeartMuLa/HeartMuLaGen'" }
+            - { string_value: "hf download --local-dir './ckpt/HeartMuLa-oss-3B' 'HeartMuLa/HeartMuLa-oss-3B-happy-new-year'" }
+            - { string_value: "hf download --local-dir './ckpt/HeartCodec-oss' 'HeartMuLa/HeartCodec-oss-20260123'" }
+      - key: patch_1_rope
+        string_value: "In HeartMuLa.setup_caches: reinitialize Llama3ScaledRoPE after reset_caches and before device block"
+      - key: patch_2_codec
+        string_value: "Add ignore_mismatched_sizes=True to both HeartCodec.from_pretrained() calls"
+
+  generate_song:
+    description: Generate a song from lyrics and style tags
+    trigger_phrases: ["generate a song", "create music from lyrics", "make a song with tags", "write me a song"]
+    rules:
+      - priority: CRITICAL
+        text: "Do NOT use bf16 for HeartCodec — degrades audio quality. Use fp32 (default)"
+      - priority: CRITICAL
+        text: "Tags must be comma-separated with no spaces: piano,happy,wedding,synthesizer"
+      - priority: HIGH
+        text: "Lyrics use bracketed structural tags: [Intro], [Verse], [Chorus], [Bridge], [Outro]"
+      - priority: HIGH
+        text: "Default max_audio_length_ms is 240000 (4 minutes)"
+      - priority: HIGH
+        text: "Output is MP3, 48kHz stereo, 128kbps"
+      - priority: NORMAL
+        text: "Tags may be ignored (known issue #90) — lyrics tend to dominate"
+      - priority: NORMAL
+        text: "RTF ~1.0 — a 4-minute song takes ~4 minutes to generate on GPU"
+    data:
+      - key: generation_command
+        string_value: "python ./examples/run_music_generation.py --model_path=./ckpt --version=3B --lyrics=./lyrics.txt --tags=./tags.txt --save_path=./output.mp3 --lazy_load true"
+      - key: key_parameters
+        map_value:
+          entries:
+            max_audio_length_ms: { string_value: "240000 (4 min)" }
+            topk: { string_value: "50" }
+            temperature: { string_value: "1.0" }
+            cfg_scale: { string_value: "1.5" }
+            lazy_load: { string_value: "false (set true for <16GB VRAM)" }
+            mula_dtype: { string_value: "bfloat16 (recommended)" }
+            codec_dtype: { string_value: "float32 (recommended for quality)" }
+      - key: multi_gpu_flags
+        string_value: "--mula_device cuda:0 --codec_device cuda:1"
+    examples:
+      - label: "basic song generation"
+        language: bash
+        code: |
+          cd heartlib && . .venv/bin/activate
+          python ./examples/run_music_generation.py \
+            --model_path=./ckpt \
+            --version="3B" \
+            --lyrics="./assets/lyrics.txt" \
+            --tags="./assets/tags.txt" \
+            --save_path="./assets/output.mp3" \
+            --lazy_load true
+      - label: "tags format"
+        language: text
+        code: |
+          piano,happy,wedding,synthesizer,romantic
+      - label: "lyrics format"
+        language: text
+        code: |
+          [Intro]
+
+          [Verse]
+          Your lyrics here...
+
+          [Chorus]
+          Chorus lyrics...
+
+          [Bridge]
+          Bridge lyrics...
+
+          [Outro]
+
+guardrails:
+  - text: "Never use bf16 for HeartCodec — always use fp32 for audio quality"
+    scope: WRITE_OPS
+  - text: "Triton not available on macOS — GPU acceleration Linux/CUDA only"
+    scope: ALWAYS
+  - text: "Suggest cloud GPU (Colab T4, Lambda Labs) if user lacks NVIDIA GPU"
+    scope: ALWAYS
+
+related:
+  - name: audiocraft
+    relationship: alternative_to
+    description: "Meta AudioCraft for text-to-music (different approach)"

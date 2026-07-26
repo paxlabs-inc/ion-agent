@@ -1,0 +1,101 @@
+skill:
+  name: imessage
+  version: 1.0.0
+  summary: Send and receive iMessages/SMS via the imsg CLI on macOS
+  author: Ion Agent
+  license: MIT
+  platforms: [macos]
+
+triggers:
+  keywords: [imessage, imsg, sms, text message, messages app]
+  intents: [send_message, read_messages, list_chats, watch_messages]
+  patterns:
+    - "(send|text|message) .*(imessage|sms|text)"
+    - "(read|show|list) .*(message|chat|conversation)"
+    - "imessage"
+
+requires:
+  binaries: [imsg]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [imessage_send, imessage_read, imessage_watch]
+  output_types: [.json]
+
+actions:
+
+  list_chats:
+    description: List recent iMessage conversations
+    trigger_phrases: ["list chats", "show conversations", "recent messages"]
+    rules:
+      - priority: HIGH
+        text: "Use imsg chats --limit N --json for structured output"
+    data:
+      - key: command
+        string_value: "imsg chats --limit 10 --json"
+
+  view_history:
+    description: View message history for a chat
+    trigger_phrases: ["show message history", "read messages", "conversation with"]
+    rules:
+      - priority: HIGH
+        text: "Use imsg history --chat-id N --limit N --json"
+      - priority: NORMAL
+        text: "Add --attachments flag to include attachment info"
+    data:
+      - key: command
+        string_value: "imsg history --chat-id 1 --limit 20 --json"
+
+  send_message:
+    description: Send an iMessage or SMS
+    trigger_phrases: ["send a message", "text someone", "send imessage"]
+    rules:
+      - priority: CRITICAL
+        text: "Always verify recipient and message text before sending"
+      - priority: CRITICAL
+        text: "Never send to unfamiliar numbers without user's explicit consent"
+      - priority: HIGH
+        text: "Confirm file paths exist before including attachments"
+      - priority: HIGH
+        text: "Use --service imessage|sms|auto to control protocol"
+      - priority: NORMAL
+        text: "Avoid spamming — throttle message rate"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            text_only: { string_value: 'imsg send --to "+14155551212" --text "Hello!"' }
+            with_attachment: { string_value: 'imsg send --to "+14155551212" --text "Check this out" --file /path/to/image.jpg' }
+            force_imessage: { string_value: 'imsg send --to "+14155551212" --text "Hi" --service imessage' }
+            force_sms: { string_value: 'imsg send --to "+14155551212" --text "Hi" --service sms' }
+    examples:
+      - label: "text mom workflow"
+        language: bash
+        code: |
+          # 1. Find mom's chat
+          imsg chats --limit 20 --json | jq '.[] | select(.displayName | contains("Mom"))'
+          # 2. Confirm with user
+          # 3. Send after confirmation
+          imsg send --to "+1555123456" --text "I'll be late"
+
+  watch_messages:
+    description: Watch for new incoming messages
+    trigger_phrases: ["watch for messages", "monitor messages", "listen for messages"]
+    rules:
+      - priority: HIGH
+        text: "Use imsg watch --chat-id N --attachments for real-time monitoring"
+    data:
+      - key: command
+        string_value: "imsg watch --chat-id 1 --attachments"
+
+guardrails:
+  - text: "Always verify recipient and message text before sending anything"
+    scope: WRITE_OPS
+  - text: "Never send to unfamiliar numbers without user's explicit consent"
+    scope: WRITE_OPS
+  - text: "Confirm file paths exist before including attachments"
+    scope: WRITE_OPS
+
+related: []

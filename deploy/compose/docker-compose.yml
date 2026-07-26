@@ -1,0 +1,53 @@
+# Production-oriented single-host Ion stack with TLS termination.
+#
+# Ion serves plain HTTP on loopback only. The Caddy proxy runs in the SAME
+# network namespace as the Ion container (network_mode: service:ion) so it can
+# reach Ion's 127.0.0.1:4174, terminates TLS, and publishes HTTPS.
+#
+# Setup:
+#   1. cp .env.example .env   and edit ION_SITE_ADDRESS
+#   2. docker compose run --rm ion init     # against a host-protected key source
+#   3. docker compose up -d
+#
+# See deploy/README.md before exposing Ion beyond your host.
+services:
+  ion:
+    image: ${ION_IMAGE:-ghcr.io/paxlabs-inc/ion-agent:latest}
+    environment:
+      ION_DATA_DIR: /data
+      ION_WEB_LISTEN: 127.0.0.1:4174
+      ION_WEB_ORIGIN: ${ION_WEB_ORIGIN:?Set the exact HTTPS Ion origin}
+      ION_AUTH_USERNAME: ${ION_AUTH_USERNAME:?Set an Ion operator username}
+      ION_AUTH_PASSWORD: ${ION_AUTH_PASSWORD:-}
+      ION_AUTH_PASSWORD_HASH: ${ION_AUTH_PASSWORD_HASH:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      ION_TAVILY_SEARCH_ENDPOINT: ${ION_TAVILY_SEARCH_ENDPOINT:-}
+      ION_SEARCH_ENDPOINT: ${ION_SEARCH_ENDPOINT:-}
+      ION_AUTO_INIT: "0"
+    volumes:
+      - ion-data:/data
+    # The proxy shares this container's network namespace, so ports for BOTH
+    # services are declared here.
+    ports:
+      - "443:443"
+      - "80:80"
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  proxy:
+    image: caddy:2.8-alpine
+    environment:
+      ION_SITE_ADDRESS: ${ION_SITE_ADDRESS:?Set the public Ion site address}
+    network_mode: "service:ion"
+    depends_on:
+      - ion
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  ion-data:
+  caddy-data:
+  caddy-config:

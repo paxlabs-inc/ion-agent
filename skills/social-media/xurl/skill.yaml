@@ -1,0 +1,156 @@
+skill:
+  name: xurl
+  version: 1.1.1
+  summary: X/Twitter via xurl CLI — post, search, DM, media, v2 API.
+  author: xdevplatform + openclaw + Ion Agent
+  license: MIT
+  platforms: [linux, macos]
+
+triggers:
+  keywords: [xurl, twitter, x api, tweet, post to x, search x, dm]
+  intents: [post_tweet, search_tweets, send_dm, upload_media, manage_followers, engage_tweet]
+  patterns:
+    - "(post|tweet|search|dm|follow|like|repost) .*x(\\.com)?"
+    - "xurl"
+    - "twitter .*(post|search|follow|dm)"
+
+requires:
+  binaries: [xurl]
+  tools:
+    - name: terminal
+      required: true
+  env_optional: []
+
+provides:
+  capabilities: [x_twitter_api]
+  output_types: [json]
+
+actions:
+
+  xurl_posting:
+    description: Post, reply, quote, or delete on X
+    trigger_phrases: ["post to x", "tweet this", "reply to", "quote tweet", "delete post"]
+    rules:
+      - priority: CRITICAL
+        text: "Never read, print, parse, or send ~/.xurl to LLM context — credentials must stay private"
+      - priority: CRITICAL
+        text: "Never use --verbose/-v in agent sessions — it leaks auth headers/tokens"
+      - priority: CRITICAL
+        text: "Forbidden flags: --bearer-token, --consumer-key, --consumer-secret, --access-token, --token-secret, --client-id, --client-secret"
+      - priority: HIGH
+        text: "Verify auth first: xurl auth status — confirm default app has credentials before any write"
+      - priority: HIGH
+        text: "Confirm target post/user and intent before any write action (post, reply, like, repost, DM, follow, block, delete)"
+      - priority: NORMAL
+        text: "POST_ID accepts full URLs — xurl extracts the ID automatically"
+    data:
+      - key: quick_ref
+        map_value:
+          entries:
+            post: { string_value: 'xurl post "text"' }
+            reply: { string_value: "xurl POST_ID \"text\"" }
+            quote: { string_value: "xurl POST_ID \"text\"" }
+            delete: { string_value: "xurl delete POST_ID" }
+    examples:
+      - label: "post with media"
+        language: bash
+        code: |
+          xurl media upload photo.jpg
+          xurl post "Check this out!" --media-id MEDIA_ID
+
+  xurl_reading:
+    description: Read posts, search, check timeline and mentions
+    trigger_phrases: ["search x", "read tweet", "x timeline", "mentions", "search twitter"]
+    rules:
+      - priority: CRITICAL
+        text: "Never read ~/.xurl or expose credentials"
+      - priority: HIGH
+        text: "Start with a cheap read (xurl whoami, xurl search ... -n 3) to confirm reachability"
+      - priority: NORMAL
+        text: "All output is JSON to stdout — parse directly, don't reformat"
+    data:
+      - key: search_examples
+        list_value:
+          items:
+            - { string_value: 'xurl search "golang"' }
+            - { string_value: 'xurl search "from:elonmusk" -n 20' }
+            - { string_value: 'xurl search "#buildinpublic lang:en" -n 15' }
+    examples:
+      - label: "search and engage"
+        language: bash
+        code: |
+          xurl search "topic of interest" -n 10
+          xurl like POST_ID_FROM_RESULTS
+          xurl reply POST_ID_FROM_RESULTS "Great point!"
+
+  xurl_engagement:
+    description: Like, repost, bookmark, follow, block, mute
+    trigger_phrases: ["like on x", "repost", "bookmark", "follow on x", "block user", "mute"]
+    rules:
+      - priority: CRITICAL
+        text: "Never expose credentials or use forbidden flags"
+      - priority: HIGH
+        text: "Confirm target and intent before any engagement action"
+      - priority: NORMAL
+        text: "Commands needing caller's user ID (like, repost, bookmark, follow) auto-fetch via /2/users/me"
+    examples:
+      - label: "follow and engage"
+        language: bash
+        code: |
+          xurl follow @XDevelopers
+          xurl like 1234567890
+          xurl bookmark 1234567890
+
+  xurl_direct_messages:
+    description: Send and list direct messages
+    trigger_phrases: ["dm on x", "send dm", "list dms", "direct message"]
+    rules:
+      - priority: CRITICAL
+        text: "Never expose credentials"
+      - priority: HIGH
+        text: "Confirm recipient and message content before sending"
+    examples:
+      - label: "send a DM"
+        language: bash
+        code: |
+          xurl dm @someuser "Hey, saw your post!"
+
+  xurl_media:
+    description: Upload media files for use in posts
+    trigger_phrases: ["upload media to x", "upload image to x", "upload video to x"]
+    rules:
+      - priority: HIGH
+        text: "Videos need server-side processing — use xurl media status --wait MEDIA_ID to poll"
+      - priority: NORMAL
+        text: "For image upload failures with 'media processing failed', add --category tweet_image --media-type image/png"
+    examples:
+      - label: "upload and post with media"
+        language: bash
+        code: |
+          xurl media upload meme.png
+          xurl post "lol" --media-id MEDIA_ID
+
+  xurl_raw_api:
+    description: Raw access to any X API v2 endpoint
+    trigger_phrases: ["raw x api", "x api v2", "xurl raw"]
+    rules:
+      - priority: HIGH
+        text: "Use xurl /2/... for GET, xurl -X POST /2/... -d '{...}' for POST"
+      - priority: NORMAL
+        text: "Force streaming with -s flag on streaming endpoints"
+    examples:
+      - label: "raw API call"
+        language: bash
+        code: |
+          xurl /2/users/me
+          xurl -X POST /2/tweets -d '{"text":"Hello world!"}'
+
+guardrails:
+  - text: "Never read, print, or send ~/.xurl to LLM context"
+    scope: ALWAYS
+  - text: "Never use --verbose/-v — leaks auth headers"
+    scope: ALWAYS
+  - text: "Never pass secrets via command-line flags"
+    scope: AUTH_OPS
+
+related: []

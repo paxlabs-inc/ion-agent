@@ -1,0 +1,93 @@
+skill:
+  name: plan
+  version: 2.0.0
+  summary: Plan mode — write an actionable markdown plan with bite-sized tasks, exact paths, and complete code.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [plan, planning, implementation plan, design plan, plan mode]
+  intents: [create_plan, plan_implementation, plan_feature]
+  patterns:
+    - "(create|write|make) .*(plan|implementation plan)"
+    - "/plan"
+    - "plan .*(feature|implementation|design)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [implementation_planning]
+  output_types: [.md]
+
+actions:
+
+  create_plan:
+    description: Write a concrete, actionable implementation plan
+    trigger_phrases: ["create a plan", "plan this feature", "write implementation plan", "/plan"]
+    rules:
+      - priority: CRITICAL
+        text: "Do NOT implement code — only write the plan markdown file"
+      - priority: CRITICAL
+        text: "Save plan to .ion/plans/YYYY-MM-DD_HHMMSS-<slug>.md"
+      - priority: HIGH
+        text: "Each task = 2-5 minutes of focused work — one action per step"
+      - priority: HIGH
+        text: "Include exact file paths (not 'the config file' but src/config/settings.py)"
+      - priority: HIGH
+        text: "Include complete code examples — copy-pasteable, not pseudocode"
+      - priority: HIGH
+        text: "Include exact commands with expected output"
+      - priority: NORMAL
+        text: "Plan structure: Header (Goal, Architecture, Tech Stack) → Tasks → Risks"
+      - priority: NORMAL
+        text: "DRY, YAGNI, TDD principles applied"
+      - priority: NORMAL
+        text: "Offer execution via subagent-driven-development after saving"
+    data:
+      - key: plan_structure
+        list_value:
+          items:
+            - { string_value: "Header: Goal, Architecture, Tech Stack" }
+            - { string_value: "Tasks: numbered, bite-sized (2-5 min each)" }
+            - { string_value: "Each task: Objective, Files, Steps with code, Verification" }
+            - { string_value: "Footer: Risks, tradeoffs, open questions" }
+      - key: task_format
+        map_value:
+          entries:
+            objective: { string_value: "One sentence what this task accomplishes" }
+            files: { string_value: "Create/Modify/Test with exact paths" }
+            step_pattern: { string_value: "Write failing test → Run to verify failure → Write minimal code → Run to verify pass → Commit" }
+    examples:
+      - label: "correct task granularity"
+        language: markdown
+        code: |
+          ### Task 1: Create User model with email field
+          **Files:** Create: src/models/user.py
+          **Step 1:** Write the model class with email field
+          **Step 2:** Run: pytest tests/test_user.py -v
+          **Step 3:** git add src/models/user.py && git commit -m "feat: add User model"
+
+  review_plan:
+    description: Review or refine an existing implementation plan
+    trigger_phrases: ["review plan", "improve plan", "refine plan"]
+    rules:
+      - priority: HIGH
+        text: "Check tasks are sequential, logical, and each is bite-sized"
+      - priority: HIGH
+        text: "Verify file paths are exact and code examples are complete"
+      - priority: NORMAL
+        text: "Ensure DRY, YAGNI, TDD principles are applied"
+
+guardrails:
+  - text: "Plan mode is read-only — only the plan file may be written"
+    scope: ALWAYS
+  - text: "Never implement code during plan mode"
+    scope: ALWAYS
+
+related: []

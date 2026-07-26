@@ -1,0 +1,201 @@
+skill:
+  name: google-workspace
+  version: 1.1.0
+  summary: Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [gmail, google calendar, google drive, google docs, google sheets, google contacts, gws, google workspace]
+  intents: [gmail_read, gmail_send, gmail_reply, calendar_list, calendar_create, drive_search, drive_upload, drive_download, sheets_read, sheets_write, docs_read, docs_create]
+  patterns:
+    - "(read|send|search|list|create|upload|download) .*(gmail|email|calendar|drive|sheet|doc|contact)"
+    - "google .*(mail|calendar|drive|docs|sheets|contacts)"
+    - "(upcoming|next) .*(meeting|event|calendar)"
+
+requires:
+  env_all: [GOOGLE_TOKEN_PATH]
+  optional_env: [GOOGLE_CLIENT_SECRET_PATH]
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+  binaries: [python3]
+
+provides:
+  capabilities: [gmail_read, gmail_send, gmail_reply, gmail_search, calendar_list, calendar_create, calendar_delete, drive_search, drive_upload, drive_download, drive_share, sheets_read, sheets_write, sheets_append, docs_read, docs_create, docs_append, contacts_list]
+  output_types: [.json, .pdf, .csv]
+
+actions:
+
+  setup:
+    description: First-time Google Workspace OAuth2 setup
+    trigger_phrases: ["set up google workspace", "configure gmail", "google oauth setup", "authorize google"]
+    rules:
+      - priority: CRITICAL
+        text: "Check if already set up first: setup.py --check — if AUTHENTICATED, skip to usage"
+      - priority: CRITICAL
+        text: "Ask user TWO questions before setup: (1) which services needed — email-only should use himalaya skill instead, (2) does account use Advanced Protection"
+      - priority: CRITICAL
+        text: "OAuth client: Desktop app type, enable Gmail/Calendar/Drive/Sheets/Docs/People APIs"
+      - priority: HIGH
+        text: "Store client secret JSON, run --client-secret, get --auth-url, user pastes redirect URL, run --auth-code"
+      - priority: HIGH
+        text: "If Error 403: access_denied → user must add themselves as test user at console.cloud.google.com/auth/audience"
+      - priority: NORMAL
+        text: "Token stored at ~/.ion/google_token.json — auto-refreshes"
+    data:
+      - key: setup_script
+        string_value: "python ${ION_HOME:-$HOME/.ion}/skills/productivity/google-workspace/scripts/setup.py"
+      - key: api_script
+        string_value: "python ${ION_HOME:-$HOME/.ion}/skills/productivity/google-workspace/scripts/google_api.py"
+      - key: required_apis
+        list_value:
+          items:
+            - { string_value: "Gmail API" }
+            - { string_value: "Google Calendar API" }
+            - { string_value: "Google Drive API" }
+            - { string_value: "Google Sheets API" }
+            - { string_value: "Google Docs API" }
+            - { string_value: "People API" }
+
+  gmail_search:
+    description: Search Gmail messages
+    trigger_phrases: ["search gmail", "find email", "check inbox", "unread emails"]
+    rules:
+      - priority: HIGH
+        text: "Returns JSON array with id, threadId, from, to, subject, date, snippet, labels"
+      - priority: HIGH
+        text: "Use Gmail search syntax: is:unread, from:, newer_than:, has:attachment, filename:"
+      - priority: NORMAL
+        text: "Load gmail-search-syntax.md reference for complex queries"
+    data:
+      - key: command_pattern
+        string_value: "$GAPI gmail search \"QUERY\" --max N"
+    examples:
+      - label: "search unread emails"
+        language: bash
+        code: "$GAPI gmail search \"is:unread\" --max 10"
+      - label: "search with date filter"
+        language: bash
+        code: "$GAPI gmail search \"from:boss@company.com newer_than:1d\""
+
+  gmail_read:
+    description: Read a full Gmail message
+    trigger_phrases: ["read email", "get email", "open email"]
+    rules:
+      - priority: HIGH
+        text: "Returns full message with body text in JSON"
+    data:
+      - key: command_pattern
+        string_value: "$GAPI gmail get MESSAGE_ID"
+
+  gmail_send:
+    description: Send or reply to Gmail messages
+    trigger_phrases: ["send email", "reply to email", "compose email"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER send email without confirming recipients, subject, and body with user first"
+      - priority: HIGH
+        text: "Reply auto-threads and sets In-Reply-To header"
+      - priority: NORMAL
+        text: "Support --html flag for HTML body and --from for custom sender"
+    examples:
+      - label: "send a plain text email"
+        language: bash
+        code: "$GAPI gmail send --to user@example.com --subject \"Hello\" --body \"Message text\""
+      - label: "reply to a message"
+        language: bash
+        code: "$GAPI gmail reply MESSAGE_ID --body \"Thanks, that works for me.\""
+
+  calendar_ops:
+    description: List, create, or delete calendar events
+    trigger_phrases: ["list events", "create event", "calendar", "upcoming meetings", "schedule meeting"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER create/delete calendar events without confirming with user first"
+      - priority: CRITICAL
+        text: "Times must include timezone — always ISO 8601 with offset (e.g., 2026-03-01T10:00:00-06:00) or UTC (Z)"
+      - priority: HIGH
+        text: "Default list shows next 7 days — use --start/--end for custom range"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            list: { string_value: "$GAPI calendar list [--start ISO --end ISO]" }
+            create: { string_value: "$GAPI calendar create --summary TITLE --start ISO --end ISO" }
+            delete: { string_value: "$GAPI calendar delete EVENT_ID" }
+
+  drive_ops:
+    description: Search, upload, download, share, or delete Drive files
+    trigger_phrases: ["upload to drive", "download from drive", "search drive", "share file", "google drive"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER delete Drive files or share files without confirming with user first"
+      - priority: HIGH
+        text: "Delete defaults to trash (reversible) — use --permanent only when explicitly requested"
+      - priority: HIGH
+        text: "Google-native files export to sensible defaults: Docs→pdf, Sheets→csv, Slides→pdf"
+      - priority: NORMAL
+        text: "Auto-detects MIME type on upload"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            search: { string_value: "$GAPI drive search \"QUERY\" --max N" }
+            upload: { string_value: "$GAPI drive upload /path/to/file [--name NAME] [--parent FOLDER_ID]" }
+            download: { string_value: "$GAPI drive download FILE_ID [--output path]" }
+            share: { string_value: "$GAPI drive share FILE_ID --email EMAIL --role reader|writer" }
+            delete: { string_value: "$GAPI drive delete FILE_ID [--permanent]" }
+
+  sheets_ops:
+    description: Read, create, or write Google Sheets
+    trigger_phrases: ["read sheet", "create spreadsheet", "update sheet", "google sheets"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER modify sheets without confirming with user first"
+      - priority: HIGH
+        text: "Range format: Sheet1!A1:D10"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            get: { string_value: "$GAPI sheets get SHEET_ID \"Sheet1!A1:D10\"" }
+            create: { string_value: "$GAPI sheets create --title \"TITLE\"" }
+            update: { string_value: "$GAPI sheets update SHEET_ID \"RANGE\" --values '[[...]]'" }
+            append: { string_value: "$GAPI sheets append SHEET_ID \"RANGE\" --values '[[...]]'" }
+
+  docs_ops:
+    description: Read, create, or append to Google Docs
+    trigger_phrases: ["read doc", "create document", "google docs", "append to doc"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER create/modify docs without confirming with user first"
+      - priority: HIGH
+        text: "Returns JSON with documentId, title, url"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            get: { string_value: "$GAPI docs get DOC_ID" }
+            create: { string_value: "$GAPI docs create --title \"TITLE\" [--body \"text\"]" }
+            append: { string_value: "$GAPI docs append DOC_ID --text \"content\"" }
+
+guardrails:
+  - text: "Always check auth before first use — run setup.py --check"
+    scope: ALWAYS
+  - text: "Confirm all write operations (send email, create/delete events, delete files, share, modify docs/sheets) with user before executing"
+    scope: WRITE_OPS
+  - text: "Calendar times must include timezone — always ISO 8601 with offset"
+    scope: ALWAYS
+  - text: "Respect rate limits — avoid rapid-fire sequential API calls"
+    scope: ALWAYS
+  - text: "Prefer himalaya skill for email-only use cases — no Google Cloud project needed"
+    scope: ALWAYS
+
+related:
+  - name: himalaya
+    relationship: alternative_to
+    description: Email-only alternative using Gmail App Password — simpler setup

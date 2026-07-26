@@ -1,0 +1,5 @@
+# Pins the Rust toolchain for the optional HNSW sidecar (hnsw-service/).
+[toolchain]
+channel = "1.78.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

@@ -1,0 +1,87 @@
+skill:
+  name: architecture-diagram
+  version: 1.0.0
+  summary: Dark-themed SVG architecture/cloud/infra diagrams as self-contained HTML
+  author: Cocoon AI, Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [architecture diagram, cloud diagram, infrastructure diagram, SVG diagram, system diagram]
+  intents: [create_architecture_diagram, draw_infrastructure, visualize_architecture]
+  patterns:
+    - "(create|draw|make|build) .*(architecture|infra|system) .*(diagram|chart|visual)"
+    - "(cloud|microservice|database) .*(diagram|topology|map)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+
+provides:
+  capabilities: [architecture_diagrams, svg_generation, dark_themed_diagrams]
+  output_types: [.html]
+
+actions:
+
+  create_diagram:
+    description: Generate a dark-themed architecture diagram as self-contained HTML with inline SVG
+    trigger_phrases: ["create architecture diagram", "draw system diagram", "build infrastructure diagram"]
+    rules:
+      - priority: CRITICAL
+        text: "Single self-contained .html file — no external dependencies except Google Fonts"
+      - priority: CRITICAL
+        text: "No JavaScript — use pure CSS for animations (pulsing dots)"
+      - priority: HIGH
+        text: "Font: JetBrains Mono from Google Fonts. Sizes: 12px names, 9px sublabels, 8px annotations"
+      - priority: HIGH
+        text: "Background: Slate-950 (#020617) with 40px grid pattern"
+      - priority: HIGH
+        text: "Components are rounded rectangles (rx=6) with 1.5px strokes — use double-rect masking for transparency"
+      - priority: HIGH
+        text: "Draw arrows early in SVG (after grid) so they render behind component boxes"
+      - priority: NORMAL
+        text: "Color palette: Frontend=#22d3ee, Backend=#34d399, Database=#a78bfa, AWS=#fbbf24, Security=#fb7185, MessageBus=#fb923c, External=#94a3b8"
+      - priority: NORMAL
+        text: "Legend must be placed outside all boundary boxes — at least 20px below lowest boundary"
+    data:
+      - key: color_palette
+        map_value:
+          entries:
+            frontend: { string_value: "#22d3ee" }
+            backend: { string_value: "#34d399" }
+            database: { string_value: "#a78bfa" }
+            aws_cloud: { string_value: "#fbbf24" }
+            security: { string_value: "#fb7185" }
+            message_bus: { string_value: "#fb923c" }
+            external: { string_value: "#94a3b8" }
+      - key: background_color
+        string_value: "#020617"
+      - key: grid_size
+        int_value: 40
+      - key: document_structure
+        list_value:
+          items:
+            - { string_value: "Header: title with pulsing dot + subtitle" }
+            - { string_value: "Main SVG: diagram in rounded border card" }
+            - { string_value: "Summary Cards: 3-card grid below diagram" }
+            - { string_value: "Footer: minimal metadata" }
+    examples:
+      - label: "info card pattern"
+        language: html
+        code: |
+          <div class="card">
+            <div class="card-header">
+              <div class="card-dot cyan"></div>
+              <h3>Title</h3>
+            </div>
+            <ul><li>• Item one</li><li>• Item two</li></ul>
+          </div>
+
+guardrails:
+  - text: "Output is a single .html file — no external rendering libraries needed"
+    scope: ALWAYS
+  - text: "Must render correctly in any modern browser offline"
+    scope: ALWAYS
+
+related: [concept-diagrams, excalidraw]

@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ion-config
+  namespace: ion
+  labels:
+    app.kubernetes.io/name: ion
+data:
+  ION_DATA_DIR: /data
+  # Ion serves plain HTTP on loopback. The proxy sidecar shares this Pod's
+  # network namespace and reaches Ion at 127.0.0.1:4174.
+  ION_WEB_LISTEN: 127.0.0.1:4174
+  # Replace this together with ingress.yaml.
+  ION_WEB_ORIGIN: https://ion.example.com
+  ION_AUTO_INIT: "0"
+  ION_OFFICE_ENABLED: "true"
+  ION_OFFICE_INTERNAL_URL: http://onlyoffice.ion.svc.cluster.local:80
+  ION_OFFICE_PUBLIC_PATH: /office-engine/
+  ION_OFFICE_CALLBACK_ORIGIN: https://ion.example.com
+  ION_OFFICE_MAX_FILE_BYTES: "104857600"
+  ION_OFFICE_MAX_VERSIONS: "100"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ion-proxy
+  namespace: ion
+  labels:
+    app.kubernetes.io/name: ion
+data:
+  Caddyfile: |
+    # Terminate plain HTTP on 8080 inside the Pod; TLS is handled by the Ingress.
+    :8080 {
+      encode zstd gzip
+      reverse_proxy 127.0.0.1:4174 {
+        flush_interval -1
+      }
+      header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+      }
+      log {
+        output stdout
+        format console
+      }
+    }

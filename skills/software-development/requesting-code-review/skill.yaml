@@ -1,0 +1,99 @@
+skill:
+  name: requesting-code-review
+  version: 2.0.0
+  summary: Pre-commit review pipeline — security scan, quality gates, independent reviewer subagent, auto-fix loop.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [code review, pre-commit review, verify code, security scan, quality gate, ship code]
+  intents: [review_code, verify_before_commit, pre_commit_check]
+  patterns:
+    - "(review|verify|check) .*(code|commit|push|before merge)"
+    - "(commit|push|ship|done) .*(review|verify)"
+    - "/review"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+
+provides:
+  capabilities: [code_review, security_scan, auto_fix]
+  output_types: []
+
+actions:
+
+  pre_commit_review:
+    description: Run the full pre-commit verification pipeline
+    trigger_phrases: ["review my code", "verify before commit", "pre-commit check", "review before push"]
+    rules:
+      - priority: CRITICAL
+        text: "No agent should verify its own work — use an independent reviewer subagent with no shared context"
+      - priority: CRITICAL
+        text: "Security scan: check for hardcoded secrets, shell injection, eval/exec, unsafe deserialization, SQL injection in added lines"
+      - priority: HIGH
+        text: "Baseline comparison: stash changes, run tests, pop — only NEW failures block the commit"
+      - priority: HIGH
+        text: "Auto-fix loop: maximum 2 fix-and-reverify cycles, then escalate to user"
+      - priority: HIGH
+        text: "Reviewer subagent returns JSON: {passed, security_concerns, logic_errors, suggestions, summary}"
+      - priority: NORMAL
+        text: "Commit prefix: [verified] — indicates independent reviewer approved"
+    data:
+      - key: security_patterns
+        list_value:
+          items:
+            - { string_value: "Hardcoded secrets: (api_key|secret|password|token)\\s*=\\s*['\\\"][^'\\\"]{6,}" }
+            - { string_value: "Shell injection: os.system(, subprocess.*shell=True" }
+            - { string_value: "Dangerous eval/exec: eval(, exec(" }
+            - { string_value: "Unsafe deserialization: pickle.loads?(" }
+            - { string_value: "SQL injection: execute(f\", .format(.*SELECT" }
+      - key: self_review_checklist
+        list_value:
+          items:
+            - { string_value: "No hardcoded secrets, API keys, or credentials" }
+            - { string_value: "Input validation on user-provided data" }
+            - { string_value: "SQL queries use parameterized statements" }
+            - { string_value: "File operations validate paths (no traversal)" }
+            - { string_value: "External calls have error handling" }
+            - { string_value: "No debug print/console.log left behind" }
+            - { string_value: "No commented-out code" }
+            - { string_value: "New code has tests" }
+    examples:
+      - label: "security scan commands"
+        language: bash
+        code: |
+          # Hardcoded secrets
+          git diff --cached | grep "^+" | grep -iE "(api_key|secret|password|token)\\s*=\\s*['\\\"][^'\\\"]{6,}['\\\"]"
+          # Shell injection
+          git diff --cached | grep "^+" | grep -E "os\\.system\\(|subprocess.*shell=True"
+
+  auto_fix:
+    description: Fix issues found during code review
+    trigger_phrases: ["fix review issues", "auto-fix", "fix security issues"]
+    rules:
+      - priority: HIGH
+        text: "Spawn a THIRD agent context — not the implementer, not the reviewer"
+      - priority: HIGH
+        text: "Fix ONLY reported issues — do NOT refactor, rename, or add features"
+      - priority: NORMAL
+        text: "After fix, re-run full verification cycle (Steps 1-6)"
+    examples:
+      - label: "fix agent delegation"
+        language: text
+        code: |
+          Goal: Fix ONLY the specific issues listed below.
+          Do NOT refactor, rename, or change anything else.
+          Issues: [INSERT security_concerns AND logic_errors]
+
+guardrails:
+  - text: "Never let the implementer verify their own work — always use independent reviewer"
+    scope: ALWAYS
+  - text: "Maximum 2 auto-fix cycles before escalating to user"
+    scope: ALWAYS
+
+related: []

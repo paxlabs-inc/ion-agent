@@ -1,0 +1,119 @@
+skill:
+  name: node-inspect-debugger
+  version: 1.0.0
+  summary: Debug Node.js via --inspect + Chrome DevTools Protocol CLI.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [node inspect, node debugger, chrome devtools, cdp, breakpoints, vitest debug]
+  intents: [debug_node, inspect_node, attach_debugger, heap_snapshot, cpu_profile]
+  patterns:
+    - "(debug|inspect|breakpoint) .*(node|nodejs|tsx|vitest)"
+    - "node.inspect"
+    - "--inspect"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [node]
+  env_optional: []
+
+provides:
+  capabilities: [node_debugging, cdp_debugging]
+  output_types: []
+
+actions:
+
+  node_inspect_repl:
+    description: Use node inspect REPL for interactive debugging
+    trigger_phrases: ["debug node script", "node inspect", "set breakpoint in node"]
+    rules:
+      - priority: HIGH
+        text: "Prefer node inspect first — it is always available and the REPL is fast"
+      - priority: HIGH
+        text: "Use --inspect-brk (not --inspect) when you need to set breakpoints before any code runs"
+      - priority: HIGH
+        text: "For TypeScript via tsx: node --inspect-brk --import tsx script.ts"
+      - priority: NORMAL
+        text: "In repl sub-mode, type any JS expression including closure variables — Ctrl+C exits back to debug>"
+      - priority: NORMAL
+        text: "Default port is 9229 — if multiple processes, use --inspect=0 and read actual URL from /json/list"
+    data:
+      - key: repl_commands
+        map_value:
+          entries:
+            continue: { string_value: "c or cont" }
+            step_over: { string_value: "n or next" }
+            step_into: { string_value: "s or step" }
+            step_out: { string_value: "o or out" }
+            set_breakpoint: { string_value: "sb('file.js', 42)" }
+            clear_breakpoint: { string_value: "cb('file.js', 42)" }
+            backtrace: { string_value: "bt" }
+            repl: { string_value: "repl (drop into REPL in current scope)" }
+            evaluate: { string_value: "exec expr" }
+            quit: { string_value: ".exit" }
+    examples:
+      - label: "launch and set breakpoint"
+        language: bash
+        code: |
+          node --inspect-brk script.js &
+          node inspect -p $!
+          # debug> sb('script.js', 42)
+          # debug> cont
+
+  node_attach_running:
+    description: Attach debugger to a running Node.js process
+    trigger_phrases: ["attach to node process", "debug running node", "inspect running node"]
+    rules:
+      - priority: HIGH
+        text: "Send SIGUSR1 to enable inspector on existing process: kill -SIGUSR1 <pid>"
+      - priority: HIGH
+        text: "Attach with: node inspect -p <pid> or node inspect ws://127.0.0.1:9229/<uuid>"
+      - priority: NORMAL
+        text: "Find WS URL: curl -s http://127.0.0.1:9229/json/list | jq -r '.[0].webSocketDebuggerUrl'"
+    examples:
+      - label: "attach to TUI process"
+        language: bash
+        code: |
+          TUI_PID=$(pgrep -f 'ui-tui/dist/entry' | head -1)
+          kill -SIGUSR1 "$TUI_PID"
+          curl -s http://127.0.0.1:9229/json/list | jq -r '.[0].webSocketDebuggerUrl'
+
+  node_cdp_scripting:
+    description: Programmatic CDP debugging via chrome-remote-interface
+    trigger_phrases: ["cdp debug", "programmatic node debug", "chrome-remote-interface"]
+    rules:
+      - priority: HIGH
+        text: "Install chrome-remote-interface to /tmp to avoid dirtying project: mkdir -p /tmp/cdp-tools && cd /tmp/cdp-tools && npm i chrome-remote-interface"
+      - priority: NORMAL
+        text: "Use NODE_PATH=/tmp/cdp-tools/node_modules to make it available"
+      - priority: NORMAL
+        text: "For heap snapshots use HeapProfiler.takeHeapSnapshot; for CPU profiles use Profiler.start/stop"
+    examples:
+      - label: "CDP driver script"
+        language: javascript
+        code: |
+          const CDP = require('chrome-remote-interface');
+          (async () => {
+            const client = await CDP({ port: 9229 });
+            const { Debugger, Runtime } = client;
+            Debugger.paused(async ({ callFrames }) => {
+              const top = callFrames[0];
+              console.log(`PAUSED @ ${top.url}:${top.location.lineNumber + 1}`);
+              await Debugger.resume();
+            });
+            await Debugger.enable();
+            await Runtime.enable();
+            await Runtime.runIfWaitingForDebugger();
+          })();
+
+guardrails:
+  - text: "Never bind --inspect to 0.0.0.0 — always use 127.0.0.1 (default) unless isolated network"
+    scope: ALWAYS
+  - text: "Never use --inspect without -brk if you need breakpoints before code runs"
+    scope: ALWAYS
+
+related: []

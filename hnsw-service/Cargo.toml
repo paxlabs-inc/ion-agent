@@ -1,0 +1,21 @@
+[package]
+name = "ion-hnsw"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+description = "Ion HNSW vector search microservice"
+
+[dependencies]
+# USearch 2.12 is contemporary with the project's Rust 1.78 baseline. Pinning
+# cxx keeps transitive build tooling within that same MSRV.
+cxx = "=1.0.122"
+usearch = "=2.12.0"
+
+[build-dependencies]
+cxx-build = "=1.0.122"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

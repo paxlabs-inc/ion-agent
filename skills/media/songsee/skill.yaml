@@ -1,0 +1,94 @@
+skill:
+  name: songsee
+  version: 1.0.0
+  summary: Audio spectrograms and feature visualizations (mel, chroma, MFCC) via CLI
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [songsee, spectrogram, mel spectrogram, chroma, mfcc, audio visualization, audio analysis, tempogram, spectral flux]
+  intents: [visualize_audio, create_spectrogram, analyze_audio, audio_features]
+  patterns:
+    - "(create|generate|make|show) .*(spectrogram|visualization|mel|chroma|mfcc)"
+    - "songsee"
+    - "audio (analysis|features|visualization)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [songsee]
+  optional_env: [ffmpeg]
+
+provides:
+  capabilities: [audio_visualization, spectrogram_generation, audio_feature_extraction]
+  output_types: [.png, .jpg]
+
+actions:
+
+  install:
+    description: Install songsee CLI
+    trigger_phrases: ["install songsee", "set up songsee"]
+    rules:
+      - priority: HIGH
+        text: "Requires Go installed; install via: go install github.com/steipete/songsee/cmd/songsee@latest"
+      - priority: NORMAL
+        text: "Optional: ffmpeg for formats beyond WAV/MP3"
+    data:
+      - key: install_command
+        string_value: "go install github.com/steipete/songsee/cmd/songsee@latest"
+
+  create_spectrogram:
+    description: Generate spectrograms and multi-panel audio visualizations
+    trigger_phrases: ["create a spectrogram", "visualize audio", "show mel spectrogram", "audio analysis chart"]
+    rules:
+      - priority: HIGH
+        text: "Multiple --viz types are comma-separated and arranged in a grid within a single image"
+      - priority: HIGH
+        text: "WAV and MP3 decoded natively; other formats need ffmpeg"
+      - priority: NORMAL
+        text: "Output images can be fed to vision_analyze for automated audio analysis"
+      - priority: NORMAL
+        text: "Use --start and --duration for time slicing"
+    data:
+      - key: visualization_types
+        map_value:
+          entries:
+            spectrogram: { string_value: "Standard frequency spectrogram" }
+            mel: { string_value: "Mel-scaled spectrogram" }
+            chroma: { string_value: "Pitch class distribution" }
+            hpss: { string_value: "Harmonic/percussive separation" }
+            selfsim: { string_value: "Self-similarity matrix" }
+            loudness: { string_value: "Loudness over time" }
+            tempogram: { string_value: "Tempo estimation" }
+            mfcc: { string_value: "Mel-frequency cepstral coefficients" }
+            flux: { string_value: "Spectral flux (onset detection)" }
+      - key: common_flags
+        map_value:
+          entries:
+            viz: { string_value: "Visualization types (comma-separated)" }
+            style: { string_value: "Color palette: classic, magma, inferno, viridis, gray" }
+            width: { string_value: "Output image width" }
+            height: { string_value: "Output image height" }
+            format: { string_value: "Output format: jpg or png" }
+            o: { string_value: "Output file path" }
+    examples:
+      - label: "basic spectrogram"
+        language: bash
+        code: "songsee track.mp3 -o spectrogram.png"
+      - label: "multi-panel visualization"
+        language: bash
+        code: "songsee track.mp3 --viz spectrogram,mel,chroma,hpss,selfsim,loudness,tempogram,mfcc,flux"
+      - label: "time slice"
+        language: bash
+        code: "songsee track.mp3 --start 12.5 --duration 8 -o slice.jpg"
+      - label: "from stdin"
+        language: bash
+        code: "cat track.mp3 | songsee - --format png -o out.png"
+
+guardrails:
+  - text: "WAV/MP3 only natively — other formats require ffmpeg"
+    scope: ALWAYS
+
+related: []

@@ -1,0 +1,113 @@
+skill:
+  name: design-md
+  version: 1.0.0
+  summary: Author, validate, lint, diff, and export Google's DESIGN.md token spec files
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [DESIGN.md, design tokens, design system spec, WCAG contrast, Tailwind export, DTCG]
+  intents: [author_design_md, lint_design_md, export_design_tokens, validate_contrast]
+  patterns:
+    - "(create|author|write) .*(DESIGN.md|design tokens|design system spec)"
+    - "(lint|validate|diff|export) .*(DESIGN.md|design tokens)"
+    - "(WCAG|contrast) .*(check|validate|accessibility)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+  binaries: [npx]
+
+provides:
+  capabilities: [design_token_authoring, design_md_linting, wcag_validation, token_export]
+  output_types: [.md, .json]
+
+actions:
+
+  author_design_md:
+    description: Create a new DESIGN.md file with YAML front matter and markdown body
+    trigger_phrases: ["create DESIGN.md", "author design tokens", "write design spec"]
+    rules:
+      - priority: CRITICAL
+        text: "YAML front matter has machine-readable tokens (normative values); markdown body has human-readable rationale"
+      - priority: HIGH
+        text: "Always include name: and colors:; other sections optional but encouraged"
+      - priority: HIGH
+        text: "Use token references ({colors.primary}) in components section — single-source palette"
+      - priority: HIGH
+        text: "Canonical section order: Overview, Colors, Typography, Layout, Elevation & Depth, Shapes, Components, Do's and Don'ts"
+      - priority: NORMAL
+        text: "Hex colors must be quoted strings in YAML — # starts comments otherwise"
+    data:
+      - key: canonical_sections
+        list_value:
+          items:
+            - { string_value: "Overview" }
+            - { string_value: "Colors" }
+            - { string_value: "Typography" }
+            - { string_value: "Layout" }
+            - { string_value: "Elevation & Depth" }
+            - { string_value: "Shapes" }
+            - { string_value: "Components" }
+            - { string_value: "Do's and Don'ts" }
+      - key: token_types
+        map_value:
+          entries:
+            color: { string_value: "# + hex (sRGB)" }
+            dimension: { string_value: "number + unit (px, em, rem)" }
+            reference: { string_value: "{path.to.token}" }
+            typography: { string_value: "object with fontFamily, fontSize, fontWeight, lineHeight, letterSpacing" }
+      - key: component_properties
+        list_value:
+          items:
+            - { string_value: "backgroundColor" }
+            - { string_value: "textColor" }
+            - { string_value: "typography" }
+            - { string_value: "rounded" }
+            - { string_value: "padding" }
+            - { string_value: "size" }
+            - { string_value: "height" }
+            - { string_value: "width" }
+
+  lint_export:
+    description: Lint, diff, and export DESIGN.md files using the CLI
+    trigger_phrases: ["lint DESIGN.md", "export tokens", "diff design"]
+    rules:
+      - priority: HIGH
+        text: "CLI: npx @google/design.md — lint, diff, export commands"
+      - priority: HIGH
+        text: "Lint catches: broken references, duplicate sections, invalid types, WCAG contrast violations"
+      - priority: NORMAL
+        text: "Export formats: --format tailwind (tailwind.theme.json), --format dtcg (tokens.json)"
+      - priority: NORMAL
+        text: "All commands accept - for stdin; lint returns exit 1 on errors"
+    data:
+      - key: cli_commands
+        list_value:
+          items:
+            - { string_value: "npx -y @google/design.md lint DESIGN.md" }
+            - { string_value: "npx -y @google/design.md diff DESIGN.md DESIGN-v2.md" }
+            - { string_value: "npx -y @google/design.md export --format tailwind DESIGN.md" }
+            - { string_value: "npx -y @google/design.md export --format dtcg DESIGN.md" }
+      - key: lint_rules
+        list_value:
+          items:
+            - { string_value: "broken-ref (error) — non-existent token reference" }
+            - { string_value: "duplicate-section (error) — same heading twice" }
+            - { string_value: "invalid-color/dimension/typography (error)" }
+            - { string_value: "wcag-contrast (warning) — component textColor vs backgroundColor" }
+            - { string_value: "unknown-component-property (warning)" }
+
+guardrails:
+  - text: "Don't nest component variants — use sibling keys (button-primary-hover, not button-primary.hover)"
+    scope: ALWAYS
+  - text: "Section order is enforced — reorder prose to match canonical list before saving"
+    scope: ALWAYS
+  - text: "Token references resolve by dotted path — {colors.primary} works, {primary} does not"
+    scope: ALWAYS
+
+related: [popular-web-designs, claude-design, excalidraw, architecture-diagram]

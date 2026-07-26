@@ -1,0 +1,44 @@
+[Unit]
+Description=Ion agent (web operator)
+Documentation=https://github.com/paxlabs-inc/ion-agent
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=ion
+Group=ion
+WorkingDirectory=/var/lib/ion
+StateDirectory=ion
+StateDirectoryMode=0700
+EnvironmentFile=-/etc/ion/environment
+Environment=PATH=/usr/local/bin:/usr/bin
+# Plain HTTP binds loopback only. Terminate TLS in a reverse proxy for remote
+# access (see deploy/README.md).
+ExecStart=/usr/local/bin/ion dashboard --data-dir=/var/lib/ion --listen=127.0.0.1:4174
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+# Hardening
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/ion
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,109 @@
+skill:
+  name: apple-reminders
+  version: 1.0.0
+  summary: "Apple Reminders via remindctl: add, list, complete, manage lists"
+  author: Ion Agent
+  license: MIT
+  platforms: [macos]
+
+triggers:
+  keywords: [reminders, remindctl, todo, tasks, apple reminders]
+  intents: [view_reminders, create_reminder, complete_reminder, manage_lists]
+  patterns:
+    - "(remind|reminder|reminders)"
+    - "(add|create|set) .*(reminder|todo|task)"
+    - "(list|show|view) .*(reminder|task)"
+    - "(complete|finish|done) .*(reminder|task)"
+
+requires:
+  binaries: [remindctl]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [apple_reminders_read, apple_reminders_write, apple_reminders_complete]
+  output_types: [.json, .txt]
+
+actions:
+
+  view_reminders:
+    description: View reminders by date range or list
+    trigger_phrases: ["show my reminders", "what's due today", "list reminders", "overdue reminders"]
+    rules:
+      - priority: HIGH
+        text: "Use remindctl for today, remindctl tomorrow, remindctl week, remindctl overdue, remindctl all"
+      - priority: HIGH
+        text: "Use --json output when parsing programmatically"
+      - priority: NORMAL
+        text: "Specific date: remindctl 2026-01-04"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            today: { string_value: "remindctl today" }
+            tomorrow: { string_value: "remindctl tomorrow" }
+            week: { string_value: "remindctl week" }
+            overdue: { string_value: "remindctl overdue" }
+            all: { string_value: "remindctl all" }
+            specific_date: { string_value: "remindctl YYYY-MM-DD" }
+            json_output: { string_value: "remindctl today --json" }
+
+  create_reminder:
+    description: Create a new Apple Reminder
+    trigger_phrases: ["add a reminder", "create reminder", "remind me to", "new reminder"]
+    rules:
+      - priority: CRITICAL
+        text: "When user says 'remind me', determine if they mean Apple Reminder (synced to phone) or agent cronjob alert — ask if ambiguous"
+      - priority: HIGH
+        text: "Always verify reminder details and due date with user before creating"
+      - priority: HIGH
+        text: "Use --due for due date, --alarm for early notification time"
+      - priority: NORMAL
+        text: "Date formats: today, tomorrow, YYYY-MM-DD, YYYY-MM-DD HH:mm, ISO 8601"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            simple: { string_value: 'remindctl add "Buy milk"' }
+            with_options: { string_value: 'remindctl add --title "Call mom" --list Personal --due tomorrow' }
+            with_datetime: { string_value: 'remindctl add --title "Meeting prep" --due "2026-02-15 09:00"' }
+            with_alarm: { string_value: 'remindctl add --title "Hairdresser" --due "2026-05-15 14:00" --alarm "2026-05-15 13:30"' }
+
+  manage_lists:
+    description: Create, view, or delete reminder lists
+    trigger_phrases: ["show reminder lists", "create reminder list", "delete reminder list"]
+    rules:
+      - priority: HIGH
+        text: "Use remindctl list to show all, remindctl list Name --create to create, remindctl list Name --delete to delete"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            list_all: { string_value: "remindctl list" }
+            show_list: { string_value: "remindctl list Work" }
+            create_list: { string_value: "remindctl list Projects --create" }
+            delete_list: { string_value: "remindctl list Work --delete" }
+
+  complete_delete:
+    description: Complete or delete reminders
+    trigger_phrases: ["complete reminder", "delete reminder", "mark reminder done"]
+    rules:
+      - priority: HIGH
+        text: "Use remindctl complete ID to complete, remindctl delete ID --force to delete"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            complete: { string_value: "remindctl complete 1 2 3" }
+            delete: { string_value: "remindctl delete 4A83 --force" }
+
+guardrails:
+  - text: "Always verify reminder details and due date with user before creating"
+    scope: ALWAYS
+  - text: "Distinguish Apple Reminders from agent cronjob alerts when user says 'remind me'"
+    scope: ALWAYS
+  - text: "Use --json output for programmatic parsing"
+    scope: READ_OPS
+
+related: []

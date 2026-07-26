@@ -1,0 +1,120 @@
+skill:
+  name: testing-llm-components
+  version: 1.0.0
+  summary: Test strategies for LLM-backed and nondeterministic components — fake-transport layering, outcome-based assertions, live-test markers, flaky-test triage.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [llm testing, test llm, nondeterministic testing, fake transport, flaky test, llm test]
+  intents: [test_llm_component, handle_flaky_tests, setup_fake_transport]
+  patterns:
+    - "(test|testing) .*(llm|model|nondeterministic|ai)"
+    - "fake.transport"
+    - "flaky .*(test|assertion)"
+    - "live.test .*(marker|skip)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+
+provides:
+  capabilities: [llm_testing, nondeterministic_testing]
+  output_types: []
+
+actions:
+
+  layer_tests:
+    description: Set up fake transport layering for LLM component tests
+    trigger_phrases: ["test llm component", "set up fake transport", "mock llm"]
+    rules:
+      - priority: CRITICAL
+        text: "Inject the transport — model call lives behind an interface (transport.chat(messages) -> str); tests wire a FakeTransport returning canned replies"
+      - priority: CRITICAL
+        text: "Unit-test everything deterministic against the fake — parsing, fallback, markdown-fence stripping, prompt contents, state transitions, retries"
+      - priority: HIGH
+        text: "Keep live-API tests few and outcome-focused — two or three tests proving real model drives the loop end-to-end, no more"
+      - priority: NORMAL
+        text: "Live tests are slow, cost tokens, and are inherently probabilistic — minimize them"
+    examples:
+      - label: "fake transport pattern"
+        language: python
+        code: |
+          class FakeTransport:
+              def __init__(self, responses):
+                  self.responses = responses
+                  self.calls = []
+              def chat(self, messages):
+                  self.calls.append(messages)
+                  return self.responses.pop(0)
+
+  assert_outcomes:
+    description: Assert on outcomes, not on model's decision path
+    trigger_phrases: ["assert on outcome", "test llm outcome", "don't assert path"]
+    rules:
+      - priority: CRITICAL
+        text: "Assert on resulting state (files written, receipts recorded, goal marked complete) — NOT on exact decision sequence"
+      - priority: CRITICAL
+        text: "A failing path assertion with a valid outcome means THE TEST IS WRONG, not the code"
+      - priority: HIGH
+        text: "A model may decompose a goal into subgoals OR act directly — both can satisfy the task"
+      - priority: NORMAL
+        text: "Structural invariants are OK to assert: at least one ACT step, no budget violations"
+    examples:
+      - label: "correct outcome assertion"
+        language: python
+        code: |
+          # GOOD: assert on outcome
+          assert file_exists("output.txt")
+          assert receipt_count >= 1
+          assert goal_status == "completed"
+
+          # BAD: assert on path
+          assert len(model_calls) == 3  # model might do it in 1 call
+
+  flaky_triage:
+    description: Triage flaky tests caused by model path variance
+    trigger_phrases: ["flaky llm test", "test fails sometimes", "nondeterministic failure"]
+    rules:
+      - priority: HIGH
+        text: "One failure where model took a different-but-valid route is a flaky assertion, not a regression"
+      - priority: HIGH
+        text: "Before touching code: print decision trace, confirm OUTCOME was wrong (not just path), re-run 2-3 times"
+      - priority: NORMAL
+        text: "A real regression fails consistently; a path variance passes on retry"
+    data:
+      - key: triage_steps
+        list_value:
+          items:
+            - { string_value: "1. Print the model's decision trace for the failing run" }
+            - { string_value: "2. Confirm the OUTCOME was actually wrong (not just the path)" }
+            - { string_value: "3. Only then tighten code or the test" }
+            - { string_value: "4. Re-run 2-3 times — real regression fails consistently" }
+
+  reduce_nondeterminism:
+    description: Prompt-side levers to reduce model nondeterminism
+    trigger_phrases: ["reduce nondeterminism", "make llm deterministic", "constrain model output"]
+    rules:
+      - priority: HIGH
+        text: "Demand exactly one JSON object; enumerate the legal actions in the prompt"
+      - priority: HIGH
+        text: "Constrain with physics, not hope — let runtime reject invalid decisions (unknown tool, budget exceeded)"
+      - priority: NORMAL
+        text: "Give the model structured world state (file maps, receipt counts), not prose — structured in, structured out"
+    data:
+      - key: llm_live_marker
+        string_value: |
+          [tool.pytest.ini_options]
+          markers = ["llm_live: tests that call the live LLM API (deselect with -m 'not llm_live')"]
+
+guardrails:
+  - text: "Never assert on model's decision path when outcome is what matters"
+    scope: ALWAYS
+  - text: "Live LLM tests must be marked with llm_live pytest marker"
+    scope: ALWAYS
+
+related: []

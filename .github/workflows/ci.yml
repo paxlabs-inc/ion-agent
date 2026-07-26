@@ -1,0 +1,301 @@
+# Ion CI Pipeline
+# Runs on every push and pull request
+
+name: CI
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+
+env:
+  GO_VERSION: "1.26.5"
+  RUST_VERSION: "1.78.0"
+  NODE_VERSION: "22.22.0"
+
+jobs:
+  # ====================================================================
+  # Go Build & Test
+  # ====================================================================
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go vulnerability scan
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - name: Build (CGO_ENABLED=0)
+        run: CGO_ENABLED=0 go build -trimpath -o bin/ion ./cmd/ion
+
+      - name: Unit tests with race detector
+        run: CGO_ENABLED=1 go test -race -count=1 -timeout=300s -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage thresholds
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${COVERAGE}%"
+          # Enforce minimum 80% overall
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
+
+      - name: Check implemented package coverage
+        run: |
+          check_package() {
+            PACKAGE="$1"
+            MINIMUM="$2"
+            COVERAGE=$(go test -cover "$PACKAGE" | awk '/coverage:/ {gsub("%", "", $5); print $5}')
+            echo "${PACKAGE}: ${COVERAGE}% (minimum ${MINIMUM}%)"
+            awk -v actual="$COVERAGE" -v minimum="$MINIMUM" \
+              'BEGIN { if (actual + 0 < minimum + 0) exit 1 }'
+          }
+          check_package ./internal/security/vault 95
+          check_package ./internal/security/policy 95
+          check_package ./internal/security/ssrf 80
+          check_package ./internal/security/dayzero 80
+          check_package ./internal/session 80
+          check_package ./pkg/protocol 80
+          check_package ./internal/provider 80
+          check_package ./internal/tools 80
+          check_package ./internal/agent 80
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.out
+          flags: unit
+
+  # ====================================================================
+  # Go Lint
+  # ====================================================================
+  lint-go:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.12.2
+          args: --timeout=5m
+
+  # ====================================================================
+  # Rust Build & Test
+  # ====================================================================
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            hnsw-service/target
+          key: ${{ runner.os }}-rust-${{ hashFiles('hnsw-service/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
+      - name: Build HNSW service
+        working-directory: hnsw-service
+        run: cargo build --release --locked
+
+      - name: Clippy
+        working-directory: hnsw-service
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Rust tests
+        working-directory: hnsw-service
+        run: cargo test --locked
+
+      - name: Rust vulnerability scan
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: hnsw-service
+
+  # ====================================================================
+  # Operator clients
+  # ====================================================================
+  operator-clients:
+    name: Web and TUI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci --ignore-scripts
+
+      - name: Audit production dependencies
+        working-directory: ui
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Reject generated contract drift
+        working-directory: ui
+        run: npm run check:generated
+
+      - name: Type check and lint
+        working-directory: ui
+        run: npm run lint
+
+      - name: Unit and terminal matrix tests
+        working-directory: ui
+        run: npm run test
+
+      - name: Deterministic production build
+        working-directory: ui
+        run: |
+          npm run build
+          npm run check:budgets
+          git diff --exit-code -- web/dist tui/dist shared/src/generated/protocol.ts
+
+      - name: Install Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser, accessibility, isolation, and approval matrix
+        working-directory: ui
+        run: npm run test:e2e --workspace=@matrixmcl/ion-web
+
+      - name: Generated operator documentation
+        run: |
+          go run ./cmd/operator-docs docs/operator.md
+          git diff --exit-code -- docs/operator.md
+
+      - name: Clean-install and restart acceptance
+        run: |
+          mkdir -p bin
+          CGO_ENABLED=0 go build -trimpath -o bin/ion ./cmd/ion
+          bash tests/operator/clean-install.sh ./bin/ion
+
+  # ====================================================================
+  # Spec Validation
+  # ====================================================================
+  spec:
+    name: Spec Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate spec.kvx
+        run: |
+          test -f spec/ion_spec/spec.kvx || (echo "::error::spec/ion_spec/spec.kvx not found" && exit 1)
+          grep -q '\[meta\]' spec/ion_spec/spec.kvx || (echo "::error::[meta] section missing" && exit 1)
+          grep -q '\[req\.' spec/ion_spec/spec.kvx || (echo "::error::[req.*] section missing" && exit 1)
+          grep -q '\[task\.' spec/ion_spec/spec.kvx || (echo "::error::[task.*] section missing" && exit 1)
+          go run ./cmd/spec-validate spec/ion_spec/spec.kvx
+          echo "OK: spec.kvx valid"
+
+      - name: Validate ENGINEERING_STANDARDS.md
+        run: |
+          test -f spec/ion_spec/ENGINEERING_STANDARDS.md || (echo "::error::ENGINEERING_STANDARDS.md not found" && exit 1)
+          echo "OK: ENGINEERING_STANDARDS.md exists"
+
+  # ====================================================================
+  # Integration Tests
+  # ====================================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Integration tests
+        run: |
+          if compgen -G "tests/integration/*_test.go" >/dev/null; then
+            CGO_ENABLED=1 go test -race -count=1 -timeout=600s -tags=integration ./tests/integration/...
+          else
+            echo "No integration tests in the current wave"
+          fi
+
+  # ====================================================================
+  # Adversarial Tests
+  # ====================================================================
+  adversarial:
+    name: Adversarial Tests
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Adversarial tests
+        run: |
+          if compgen -G "tests/adversarial/*_test.go" >/dev/null; then
+            CGO_ENABLED=1 go test -race -count=1 -timeout=600s -tags=adversarial ./tests/adversarial/...
+          else
+            echo "No adversarial tests in the current wave"
+          fi

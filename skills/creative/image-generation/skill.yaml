@@ -1,0 +1,158 @@
+skill:
+  name: image-generation
+  version: 1.0.0
+  summary: "Image generation and vision analysis via xAI (Grok Imagine) or FAL backends"
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [image generation, vision, xai, fal, grok imagine, ai art, branding, image analysis]
+  intents: [generate_image, analyze_image, style_matching, vision_analysis]
+  patterns:
+    - "(generate|create|make|produce) .*(image|picture|photo|illustration)"
+    - "(analyze|inspect|examine) .*(image|photo|picture)"
+    - "style.*(match|transfer|reference)"
+    - "(grok imagine|fal|image_gen)"
+
+requires:
+  env_all: [XAI_API_KEY]
+  optional_env: [FAL_KEY]
+  tools:
+    - name: image_generate
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [image_generation, vision_analysis, style_matching]
+  output_types: [.png, .jpg, .webp]
+
+actions:
+
+  setup_providers:
+    description: Configure xAI or FAL as image generation backend
+    trigger_phrases: ["set up image generation", "configure xai", "configure fal"]
+    rules:
+      - priority: CRITICAL
+        text: "xAI is the preferred backend. FAL is fallback only."
+      - priority: HIGH
+        text: "Store XAI_API_KEY in config. Optionally set image_gen.provider and vision.provider."
+      - priority: HIGH
+        text: "FAL auto-detects when FAL_KEY is set, or set image_gen.provider=fal explicitly."
+    data:
+      - key: xai_setup
+        map_value:
+          entries:
+            api_key: { string_value: "ion config set XAI_API_KEY '<key>'" }
+            provider: { string_value: "ion config set image_gen.provider xai" }
+            vision: { string_value: "ion config set vision.provider xai" }
+      - key: fal_setup
+        map_value:
+          entries:
+            api_key: { string_value: "ion config set FAL_KEY '<key>'" }
+            provider: { string_value: "ion config set image_gen.provider fal" }
+
+  generate_image:
+    description: Generate images using the image_generate tool
+    trigger_phrases: ["generate an image", "create a picture", "make an illustration", "image of"]
+    rules:
+      - priority: CRITICAL
+        text: "Use the image_generate tool directly. Parameters: prompt, aspect_ratio, image_url, reference_image_urls."
+      - priority: HIGH
+        text: "aspect_ratio options: landscape (16:9), square (1:1), portrait (16:9 tall)."
+      - priority: HIGH
+        text: "image_url enables image-to-image mode. reference_image_urls (up to 2) for style/composition references."
+      - priority: HIGH
+        text: "xAI produces public URLs that persist (storage fees apply). Disable with image_gen.xai.storage.enabled=false."
+      - priority: NORMAL
+        text: "Up to 5 concurrent image_generate calls work well for batch generation."
+    data:
+      - key: aspect_ratios
+        list_value:
+          items: [{ string_value: "landscape (16:9)" }, { string_value: "square (1:1)" }, { string_value: "portrait (16:9 tall)" }]
+      - key: max_reference_images
+        int_value: 2
+      - key: max_concurrent
+        int_value: 5
+
+  vision_analysis:
+    description: Analyze images via xAI vision API or vision_analyze tool
+    trigger_phrases: ["analyze this image", "describe this picture", "what's in this image", "vision analysis"]
+    rules:
+      - priority: CRITICAL
+        text: "Use vision_analyze tool if available. Fallback: call xAI chat completions API directly via execute_code."
+      - priority: CRITICAL
+        text: "No grok-2-vision model exists. Use grok-4.5 or grok-4.3 for vision tasks."
+      - priority: HIGH
+        text: "Encode images as base64 and pass with detail='high' for best results."
+      - priority: HIGH
+        text: "xAI vision endpoint: POST https://api.x.ai/v1/chat/completions with model grok-4.5."
+    data:
+      - key: vision_models
+        list_value:
+          items: [{ string_value: "grok-4.5" }, { string_value: "grok-4.3" }]
+      - key: generation_models
+        list_value:
+          items: [{ string_value: "grok-imagine-image" }, { string_value: "grok-imagine-image-quality" }]
+      - key: api_endpoint
+        string_value: "https://api.x.ai/v1/chat/completions"
+    examples:
+      - label: "vision analysis via execute_code fallback"
+        language: python
+        code: |
+          import base64, json, os, urllib.request
+          api_key = ""
+          with open("/data/.ion/.env") as f:
+              for line in f:
+                  if line.startswith("XAI_API_KEY="):
+                      api_key = line.strip().split("=", 1)[1]; break
+          with open("/path/to/image.jpg", "rb") as f:
+              b64 = base64.b64encode(f.read()).decode()
+          payload = json.dumps({"model": "grok-4.5", "messages": [{"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}},
+              {"type": "text", "text": "Describe the visual style in detail."}
+          ]}], "max_tokens": 600})
+          req = urllib.request.Request("https://api.x.ai/v1/chat/completions", data=payload.encode(),
+              headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"})
+          resp = urllib.request.urlopen(req, timeout=60)
+          print(json.loads(resp.read())["choices"][0]["message"]["content"])
+
+  style_matched_generation:
+    description: Generate images matching the style of reference images
+    trigger_phrases: ["match this style", "style-matched generation", "generate in this style"]
+    rules:
+      - priority: CRITICAL
+        text: "Workflow: 1) Analyze each reference via vision API, 2) Synthesize style DNA, 3) Generate with encoded style, 4) Present with style notes."
+      - priority: HIGH
+        text: "Style DNA components: color palette, composition, materials/textures, lighting, typography, mood/atmosphere."
+      - priority: HIGH
+        text: "For premium tech aesthetic: define background (deep black void), materials (frosted glass), lighting (dramatic rim), composition (generous negative space), quality (ultra-clean 8K)."
+      - priority: NORMAL
+        text: "Include 'no text' in prompts to prevent unwanted typography artifacts."
+    data:
+      - key: style_dna_components
+        list_value:
+          items:
+            - { string_value: "color_palette" }
+            - { string_value: "composition" }
+            - { string_value: "materials_textures" }
+            - { string_value: "lighting" }
+            - { string_value: "typography" }
+            - { string_value: "mood_atmosphere" }
+      - key: premium_tech_defaults
+        map_value:
+          entries:
+            background: { string_value: "deep black void, pure matte black" }
+            materials: { string_value: "frosted glass, holographic, subsurface scattering" }
+            lighting: { string_value: "dramatic rim lighting, soft bloom, volumetric glow" }
+            composition: { string_value: "generous negative space, asymmetric balance" }
+            quality: { string_value: "ultra-clean, photorealistic, 8K, editorial quality" }
+
+guardrails:
+  - text: "No grok-2-vision model exists — use grok-4.5 or grok-4.3 for vision tasks"
+    scope: ALWAYS
+  - text: "xAI public URLs persist and incur storage fees — warn user or disable storage"
+    scope: ALWAYS
+
+related: []

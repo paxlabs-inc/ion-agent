@@ -1,0 +1,101 @@
+skill:
+  name: docs-sync
+  version: 1.0.0
+  summary: Sync documentation against source code — systematic discrepancy detection and bulk rewrite.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [docs sync, documentation sync, update docs, rewrite docs, docs drift, reference docs]
+  intents: [sync_documentation, rewrite_docs, update_docs_from_source]
+  patterns:
+    - "(rewrite|update|sync) .*(docs|documentation) .*(source|code)"
+    - "docs .*(out of date|stale|wrong|drift)"
+    - "regenerate .*(reference|api) docs"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [documentation_sync]
+  output_types: [.md, .mdx]
+
+actions:
+
+  docs_sync:
+    description: Synchronize reference documentation with current source code
+    trigger_phrases: ["sync docs", "update docs from source", "docs are wrong", "rewrite docs from source"]
+    rules:
+      - priority: CRITICAL
+        text: "Always read the FULL source file — many critical definitions live in the middle or end"
+      - priority: CRITICAL
+        text: "The code is truth — if README says one thing and source says another, source wins"
+      - priority: HIGH
+        text: "Rewrite whole files, don't patch individual fields — a doc with 3 corrected fields but 2 stale paragraphs is worse than a clean rewrite"
+      - priority: HIGH
+        text: "Check ALL enum/const tables completely — when source defines 14 edge types and doc lists 6, list all 14"
+      - priority: HIGH
+        text: "Preserve existing page structure (headings, section order) unless source fundamentally changed architecture"
+      - priority: NORMAL
+        text: "Batch reads for independent files (parallel), serialize writes"
+      - priority: NORMAL
+        text: "Verify function parameter names match source — Go signatures often differ from docs"
+    data:
+      - key: drift_patterns
+        list_value:
+          items:
+            - { string_value: "Struct field drift (added/removed/renamed/retyped)" }
+            - { string_value: "Missing journal/entry kinds" }
+            - { string_value: "Missing enum values" }
+            - { string_value: "Wrong function signatures" }
+            - { string_value: "Stale code examples" }
+            - { string_value: "Missing features" }
+            - { string_value: "Wrong cross-references" }
+            - { string_value: "Outdated namespace tables" }
+            - { string_value: "Wrong invariant claims" }
+            - { string_value: "Missing error types" }
+    examples:
+      - label: "inventory source and docs"
+        language: bash
+        code: |
+          # Source inventory: extract struct definitions, function signatures, constants
+          grep -n 'type .*struct' src/*.go
+          grep -n 'func ' src/*.go | grep -v '^.*func init'
+          # Doc inventory: check each doc page against source
+
+  docs_quality_check:
+    description: Run quality checklist on synced documentation
+    trigger_phrases: ["check docs quality", "verify docs", "docs checklist"]
+    rules:
+      - priority: HIGH
+        text: "Every exported struct in source must have a corresponding doc section"
+      - priority: HIGH
+        text: "Every enum/const table in docs must match source values exactly"
+      - priority: NORMAL
+        text: "Every code example must use current field names and types"
+      - priority: NORMAL
+        text: "No em dashes in output — use commas or semicolons instead"
+    data:
+      - key: quality_checklist
+        list_value:
+          items:
+            - { string_value: "Every exported struct has doc section" }
+            - { string_value: "Every enum/const table matches source" }
+            - { string_value: "Code examples use current field names" }
+            - { string_value: "Design decisions verified against source comments" }
+            - { string_value: "Cross-references still resolve" }
+            - { string_value: "Error reference tables complete" }
+            - { string_value: "Repository layout tree matches actual structure" }
+
+guardrails:
+  - text: "Source code is always truth — never trust docs over source"
+    scope: ALWAYS
+  - text: "Read full source files — never truncate or assume"
+    scope: ALWAYS
+
+related: []

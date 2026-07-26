@@ -1,0 +1,124 @@
+skill:
+  name: academic-writing
+  version: 1.0.0
+  summary: Write academic papers with enforced style constraints and verified real citations
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [academic writing, research paper, style constraints, banned words, verified citations, IEEE]
+  intents: [write_academic, enforce_style, verify_citations]
+  patterns:
+    - "(write|draft) .*(paper|report) .*(style|constraint|academic)"
+    - "(banned|forbidden) .*(words|phrases)"
+    - "verified .*(citations|references)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [academic_writing, style_enforcement, citation_verification, em_dash_replacement]
+  output_types: [.txt, .md]
+
+actions:
+
+  gather_citations:
+    description: Search for genuine arXiv IDs, DOIs, or official URLs before writing
+    trigger_phrases: ["find citations", "search references", "gather citations"]
+    rules:
+      - priority: CRITICAL
+        text: "Never fabricate citation IDs — search for genuine arXiv IDs, DOIs, or official URLs"
+      - priority: HIGH
+        text: "Batch independent citation searches in parallel"
+      - priority: HIGH
+        text: "Confirm each ID resolves to the intended paper on arxiv.org"
+      - priority: NORMAL
+        text: "Maintain a running reference list: authors, title, venue, year, ID"
+    data:
+      - key: search_pattern
+        string_value: "arxiv \"exact paper title\" author year arXiv ID"
+
+  write_with_constraints:
+    description: Write with embedded style constraints treated as hard rules
+    trigger_phrases: ["write paper", "draft with constraints", "apply style rules"]
+    rules:
+      - priority: CRITICAL
+        text: "Treat user-supplied style rules as hard constraints — keep banned word list active throughout"
+      - priority: CRITICAL
+        text: "For em dashes: use commas, hyphens (-), or parentheses"
+      - priority: HIGH
+        text: "For 'we' voice: we argue, we show, we propose, we present"
+      - priority: HIGH
+        text: "Draft all sections, then verify — don't verify mid-draft"
+      - priority: NORMAL
+        text: "Include formal definitions and propositions when the topic warrants them"
+    data:
+      - key: constraint_types
+        list_value:
+          items:
+            - { string_value: "banned_words" }
+            - { string_value: "banned_punctuation" }
+            - { string_value: "required_voice" }
+            - { string_value: "citation_format" }
+            - { string_value: "structure" }
+            - { string_value: "word_count_range" }
+            - { string_value: "claim_precision" }
+      - key: em_dash_replacements
+        map_value:
+          entries:
+            parenthetical_aside: { string_value: "commas or parentheses" }
+            interrupting_clause: { string_value: "commas" }
+            range_connection: { string_value: "hyphen (-)" }
+            dramatic_pause: { string_value: "rewrite sentence" }
+
+  verify_compliance:
+    description: Run automated checks after drafting — never skip
+    trigger_phrases: ["verify compliance", "run checks", "check style"]
+    rules:
+      - priority: CRITICAL
+        text: "Run automated checks before delivering — never skip verification"
+      - priority: HIGH
+        text: "Check word count, em dashes (UTF-8), and banned words (case-insensitive)"
+      - priority: HIGH
+        text: "If violations found: use sed for replacements, patch for complex rewrites"
+      - priority: HIGH
+        text: "Re-run full verification after each fix round until zero violations"
+      - priority: NORMAL
+        text: "Em dash (—) is banned; regular hyphen (-) is fine — verify grep targets correct UTF-8"
+    data:
+      - key: check_commands
+        list_value:
+          items:
+            - { string_value: "wc -w <file>" }
+            - { string_value: "grep -c '—' <file>" }
+            - { string_value: "grep -i -c -E 'delve|landscape|tapestry|crucial|...' <file>" }
+      - key: banned_words_extended
+        list_value:
+          items:
+            - { string_value: "delve" }
+            - { string_value: "landscape" }
+            - { string_value: "tapestry" }
+            - { string_value: "crucial" }
+            - { string_value: "furthermore" }
+            - { string_value: "moreover" }
+            - { string_value: "aforementioned" }
+            - { string_value: "notably" }
+            - { string_value: "particularly" }
+            - { string_value: "it is important to note" }
+            - { string_value: "in the realm of" }
+            - { string_value: "in conclusion" }
+
+guardrails:
+  - text: "Never fabricate citations — a single fake citation destroys credibility"
+    scope: ALWAYS
+  - text: "Always run grep checks after writing, even if careful during drafting"
+    scope: ALWAYS
+  - text: "Re-run full check after each fix round until zero violations"
+    scope: ALWAYS
+
+related: [humanizer, research-paper-writing, arxiv]

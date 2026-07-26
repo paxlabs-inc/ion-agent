@@ -1,0 +1,29 @@
+# Caddy reverse proxy for Ion.
+#
+# Runs in Ion's network namespace, so the upstream is Ion's loopback listener.
+# {$ION_SITE_ADDRESS} is provided via the environment (see .env.example).
+#
+#   - Set a real domain to get automatic Let's Encrypt certificates.
+#   - Set https://localhost or an IP to use Caddy's internal self-signed CA.
+
+{$ION_SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# Ion enforces a strict CSP and serves the operator on loopback.
+	reverse_proxy 127.0.0.1:4174 {
+		header_up Host {upstream_hostport}
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

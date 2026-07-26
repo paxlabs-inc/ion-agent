@@ -1,0 +1,46 @@
+# Ion code owners
+#
+# These owners are requested for review automatically when a pull request
+# touches matching paths. See GOVERNANCE.md and MAINTAINERS.md.
+# Order matters: the last matching pattern wins.
+
+# Default owners for everything in the repo.
+*                           @paxlabs-inc/ion-maintainers
+
+# Runtime and agent loop
+/cmd/                       @paxlabs-inc/ion-maintainers
+/internal/agent/            @paxlabs-inc/ion-maintainers
+/internal/tools/            @paxlabs-inc/ion-maintainers
+/internal/swarm/            @paxlabs-inc/ion-maintainers
+
+# Security-sensitive code requires security reviewers
+/internal/security/         @paxlabs-inc/ion-security
+/SECURITY.md                @paxlabs-inc/ion-security
+
+# Session, memory, and durability
+/internal/session/          @paxlabs-inc/ion-maintainers
+/internal/memory/           @paxlabs-inc/ion-maintainers
+/internal/work/             @paxlabs-inc/ion-maintainers
+/internal/scheduler/        @paxlabs-inc/ion-maintainers
+/migrations/                @paxlabs-inc/ion-maintainers
+
+# Control plane and generated protocol
+/internal/controlplane/     @paxlabs-inc/ion-maintainers
+/ui/shared/                 @paxlabs-inc/ion-maintainers
+
+# Operator clients
+/ui/web/                    @paxlabs-inc/ion-web
+/ui/tui/                    @paxlabs-inc/ion-web
+
+# Rust vector-search sidecar
+/hnsw-service/              @paxlabs-inc/ion-maintainers
+
+# Deployment, packaging, and infrastructure
+/deploy/                    @paxlabs-inc/ion-infra
+/docker/                    @paxlabs-inc/ion-infra
+/packaging/                 @paxlabs-inc/ion-infra
+/.devcontainer/             @paxlabs-inc/ion-infra
+/.github/                   @paxlabs-inc/ion-infra
+
+# Specification is authoritative — maintainers only
+/spec/                      @paxlabs-inc/ion-maintainers

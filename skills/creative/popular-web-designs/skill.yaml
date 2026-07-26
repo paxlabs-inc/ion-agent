@@ -1,0 +1,116 @@
+skill:
+  name: popular-web-designs
+  version: 1.0.0
+  summary: "54 production-ready design systems (Stripe, Linear, Vercel) as HTML/CSS templates"
+  author: Ion Agent + Teknium
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [design system, web design, landing page, dashboard design, stripe style, linear style, vercel style, UI template]
+  intents: [style_like_brand, create_styled_ui, match_design_system]
+  patterns:
+    - "(build|create|make) .*(page|site|ui) .*(looks like|styled like|like) .*(stripe|linear|vercel|apple|figma)"
+    - "(stripe|linear|vercel|apple|figma|notion) .*(style|design|aesthetic)"
+    - "web design"
+    - "landing page"
+    - "dashboard design"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [design_system_templates, brand_styled_html, font_substitution]
+  output_types: [.html, .css]
+
+actions:
+
+  select_design:
+    description: Choose a design system from the 54-template catalog
+    trigger_phrases: ["pick a design", "choose a template", "which design system"]
+    rules:
+      - priority: CRITICAL
+        text: "Load template: skill_view(name='popular-web-designs', file_path='templates/<site>.md'). Each template has color palette, typography, components, spacing, shadows."
+      - priority: HIGH
+        text: "Match design to content: dev tools → Linear/Vercel/Supabase, docs → Mintlify/Notion, marketing → Stripe/Apple, dark UIs → Cursor/ElevenLabs."
+      - priority: HIGH
+        text: "Pair with claude-design for design process and taste, this skill supplies visual vocabulary."
+      - priority: NORMAL
+        text: "Pair with generative-widgets skill to serve via cloudflared tunnel."
+    data:
+      - key: catalog_categories
+        list_value:
+          items:
+            - { string_value: "AI & Machine Learning (12 templates)" }
+            - { string_value: "Developer Tools & Platforms (14 templates)" }
+            - { string_value: "Infrastructure & Cloud (6 templates)" }
+            - { string_value: "Design & Productivity (10 templates)" }
+            - { string_value: "Fintech & Crypto (4 templates)" }
+            - { string_value: "Enterprise & Consumer (8 templates)" }
+      - key: style_categories
+        map_value:
+          entries:
+            dev_dashboards: { string_value: "Linear, Vercel, Supabase, Raycast, Sentry" }
+            docs_content: { string_value: "Mintlify, Notion, Sanity, MongoDB" }
+            marketing_landing: { string_value: "Stripe, Framer, Apple, SpaceX" }
+            dark_mode: { string_value: "Linear, Cursor, ElevenLabs, Warp, Superhuman" }
+            playful: { string_value: "PostHog, Figma, Lovable, Zapier, Miro" }
+            premium_luxury: { string_value: "Apple, BMW, Stripe, Superhuman, Revolut" }
+            monospace_terminal: { string_value: "Ollama, OpenCode, x.ai, VoltAgent" }
+
+  apply_font_substitution:
+    description: Map proprietary fonts to Google Fonts CDN substitutes
+    trigger_phrases: ["font substitution", "cdn font", "google fonts alternative"]
+    rules:
+      - priority: HIGH
+        text: "When CDN font matches original (Inter, IBM Plex, Rubik, Geist), no substitution loss."
+      - priority: HIGH
+        text: "When using a substitute, follow template weight/size/letter-spacing values closely — those carry more visual identity than the font face."
+      - priority: NORMAL
+        text: "Common mappings: Geist→Geist (Google), sohne-var→Source Sans 3, Circular→DM Sans, figmaSans→Inter."
+    data:
+      - key: font_mappings
+        map_value:
+          entries:
+            geist: { string_value: "Geist (Google Fonts)" }
+            sohne_var: { string_value: "Source Sans 3" }
+            circular: { string_value: "DM Sans" }
+            figmaSans: { string_value: "Inter" }
+            berkeley_mono: { string_value: "JetBrains Mono" }
+            airbnb_cereal: { string_value: "DM Sans" }
+
+  generate_styled_html:
+    description: Generate HTML/CSS using design system tokens from a template
+    trigger_phrases: ["generate styled page", "build with design tokens", "create styled html"]
+    rules:
+      - priority: CRITICAL
+        text: "Apply template color palette as CSS custom properties in :root. Apply typography from template Section 3."
+      - priority: HIGH
+        text: "Write with write_file, serve with generative-widgets (cloudflared tunnel), verify with browser_vision."
+      - priority: NORMAL
+        text: "Each template includes Ion Implementation Notes with CDN font substitute and Google Fonts link tag."
+    examples:
+      - label: "html generation pattern"
+        language: html
+        code: |
+          <!DOCTYPE html><html><head>
+          <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+          <title>Page Title</title>
+          <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
+          <style>
+            :root { --color-bg: #ffffff; --color-text: #171717; --color-accent: #533afd; }
+            body { font-family: 'Inter', system-ui, sans-serif; color: var(--color-text); background: var(--color-bg); }
+          </style>
+          </head><body><!-- Build using component specs from template --></body></html>
+
+guardrails:
+  - text: "Load template before generating — never guess design tokens"
+    scope: ALWAYS
+  - text: "Verify rendered output with browser_vision — don't just write HTML and hope"
+    scope: ALWAYS
+
+related: []

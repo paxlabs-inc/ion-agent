@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a reproducible problem in Ion
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please search
+        [existing issues](https://github.com/paxlabs-inc/ion-agent/issues) first.
+
+        Do **not** report security vulnerabilities here. Use
+        [private vulnerability reporting](https://github.com/paxlabs-inc/ion-agent/security/advisories/new)
+        instead. See [SECURITY.md](https://github.com/paxlabs-inc/ion-agent/blob/master/SECURITY.md).
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through private reporting).
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ion version
+      description: Output of `ion version`.
+      placeholder: "e.g. v0.3.1 (commit abcd123)"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Ion?
+      options:
+        - Built from source (make build)
+        - Docker / docker compose
+        - Kubernetes / Helm
+        - systemd package
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and architecture
+      placeholder: "e.g. Ubuntu 24.04 x86_64, macOS 14 arm64"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including full error output.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands and actions that trigger the bug.
+      placeholder: |
+        1. Run `...`
+        2. Open `...`
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant log output. This will be automatically formatted as code.
+      render: shell

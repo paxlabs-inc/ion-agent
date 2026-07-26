@@ -1,0 +1,111 @@
+skill:
+  name: spike
+  version: 1.0.0
+  summary: Throwaway experiments to validate an idea before build — decompose, research, build, verdict.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [spike, prototype, experiment, feasibility, proof of concept, try this, quick prototype]
+  intents: [run_spike, validate_idea, compare_approaches, feasibility_check]
+  patterns:
+    - "(spike|prototype|experiment) .*(this|that|idea)"
+    - "(try|see if) .*(works|possible)"
+    - "before .*(commit|build|implement)"
+    - "compare .*(approaches|libraries|tools)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [spike_prototyping, feasibility_testing]
+  output_types: [.md, .py, .js, .ts]
+
+actions:
+
+  run_spike:
+    description: Execute a spike experiment to validate feasibility
+    trigger_phrases: ["spike this out", "try this approach", "is this even possible", "quick prototype"]
+    rules:
+      - priority: CRITICAL
+        text: "Spikes are disposable by design — throw them away once they've paid their debt"
+      - priority: CRITICAL
+        text: "Do NOT use spike for production path work — use the plan skill instead"
+      - priority: HIGH
+        text: "Decompose into 2-5 independent feasibility questions — each question is one spike"
+      - priority: HIGH
+        text: "Order by risk — the spike most likely to kill the idea runs first"
+      - priority: HIGH
+        text: "Bias toward something the user can interact with — CLI, HTML page, web server, or test with recognizable assertions"
+      - priority: HIGH
+        text: "Never declare 'it works' after one happy-path run — test edge cases, follow surprising findings"
+      - priority: NORMAL
+        text: "Each spike gets its own directory: spikes/NNN-descriptive-name/"
+      - priority: NORMAL
+        text: "Verdict: VALIDATED | PARTIAL | INVALIDATED — with what worked, what didn't, surprises, recommendation"
+    data:
+      - key: spike_types
+        list_value:
+          items:
+            - { string_value: "standard — one approach answering one question" }
+            - { string_value: "comparison — same question, different approaches (shared number, letter suffix)" }
+      - key: output_preference
+        list_value:
+          items:
+            - { string_value: "1. Runnable CLI with observable output" }
+            - { string_value: "2. Minimal HTML page demonstrating behavior" }
+            - { string_value: "3. Small web server with one endpoint" }
+            - { string_value: "4. Unit test with recognizable assertions" }
+      - key: method_loop
+        string_value: "decompose → research → build → verdict (iterate on findings)"
+    examples:
+      - label: "decompose a feature idea"
+        language: markdown
+        code: |
+          | # | Spike | Validates | Risk |
+          |---|-------|-----------|------|
+          | 001 | websocket-streaming | WS connection streams tokens <100ms | High |
+          | 002a | pdf-parse-pdfjs | pdfjs extracts structured text | Medium |
+          | 002b | pdf-parse-camelot | camelot extracts structured text | Medium |
+
+  compare_approaches:
+    description: Build comparison spikes for head-to-head evaluation
+    trigger_phrases: ["compare approaches", "which library is better", "a vs b"]
+    rules:
+      - priority: HIGH
+        text: "Build comparison spikes back to back, then do head-to-head with dimension table"
+      - priority: NORMAL
+        text: "Dimensions: extraction quality, setup complexity, performance, edge case handling"
+    examples:
+      - label: "head-to-head comparison"
+        language: markdown
+        code: |
+          ## Head-to-head: pdfjs vs camelot
+          | Dimension | pdfjs (002a) | camelot (002b) |
+          |-----------|--------------|----------------|
+          | Extraction quality | 9/10 structured | 7/10 table-only |
+          | Setup complexity | npm install, 1 line | pip + ghostscript |
+          | Perf on 100-page PDF | 3s | 18s |
+          **Winner:** pdfjs for our use case
+
+  frontier_spike:
+    description: Determine what to spike next from existing spikes
+    trigger_phrases: ["what should I spike next", "next spike", "spike frontier"]
+    rules:
+      - priority: HIGH
+        text: "Look for integration risks, data handoffs, gaps in vision, and alternative approaches for PARTIAL/INVALIDATED spikes"
+      - priority: NORMAL
+        text: "Propose 2-4 candidates as Given/When/Then — let user pick"
+
+guardrails:
+  - text: "Spikes are disposable — never clean up for production"
+    scope: ALWAYS
+  - text: "Don't use spike when the answer is knowable from docs or reading code"
+    scope: ALWAYS
+
+related: []

@@ -1,0 +1,33 @@
+# Normalize line endings across platforms.
+* text=auto eol=lf
+
+# Explicitly binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
+
+# Shell scripts must stay LF.
+*.sh text eol=lf
+
+# Generated files: keep out of diffs and language stats.
+ui/shared/src/generated/** linguist-generated=true
+ui/web/dist/** linguist-generated=true
+ui/tui/dist/** linguist-generated=true
+docs/operator.md linguist-generated=true
+AGENTS.md linguist-generated=true
+CLAUDE.md linguist-generated=true
+
+# Vendored or non-code paths excluded from language stats.
+assets/** linguist-vendored=true
+docs/** linguist-documentation=true
+
+# Lockfiles: collapse in diffs.
+go.sum linguist-generated=true
+ui/package-lock.json linguist-generated=true
+hnsw-service/Cargo.lock linguist-generated=true

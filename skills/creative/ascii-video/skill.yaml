@@ -1,0 +1,115 @@
+skill:
+  name: ascii-video
+  version: 1.0.0
+  summary: Convert video/audio/images to colored ASCII MP4/GIF with production pipeline
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [ASCII video, text art video, terminal video, character art animation, retro visualization]
+  intents: [create_ascii_video, video_to_ascii, audio_visualizer, generative_ascii]
+  patterns:
+    - "(create|make|generate) .*(ASCII|text) .*(video|animation|visualizer)"
+    - "(convert|transform) .*(video|audio) .*(ASCII|text)"
+    - "(audio|music) .*(visualizer|reactive) .*(ASCII|text)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+  binaries: [python3, ffmpeg, ffprobe]
+
+provides:
+  capabilities: [ascii_video, audio_reactive_visuals, generative_ascii_animation, video_to_ascii]
+  output_types: [.mp4, .gif]
+
+actions:
+
+  creative_vision:
+    description: Define the creative concept before any code
+    trigger_phrases: ["plan ASCII video", "design concept", "creative direction"]
+    rules:
+      - priority: CRITICAL
+        text: "Before writing code, articulate: mood, visual story, color world, character texture, what makes THIS different"
+      - priority: CRITICAL
+        text: "First-render excellence is non-negotiable — output must be visually striking without revision"
+      - priority: HIGH
+        text: "Cohesive aesthetic over technical correctness — all scenes must share visual language"
+      - priority: HIGH
+        text: "Dense, layered, considered — never flat black backgrounds, always multi-grid composition"
+      - priority: NORMAL
+        text: "Be proactively creative — include at least one visual moment user didn't ask for but will appreciate"
+    data:
+      - key: aesthetic_dimensions
+        list_value:
+          items:
+            - { string_value: "character_palette" }
+            - { string_value: "color_strategy" }
+            - { string_value: "background_texture" }
+            - { string_value: "primary_effects" }
+            - { string_value: "particles" }
+            - { string_value: "shader_mood" }
+            - { string_value: "grid_density" }
+            - { string_value: "coordinate_space" }
+            - { string_value: "feedback" }
+            - { string_value: "masking" }
+            - { string_value: "transitions" }
+
+  build_script:
+    description: Build single self-contained Python script following the 6-stage pipeline
+    trigger_phrases: ["build script", "write script", "create pipeline"]
+    rules:
+      - priority: CRITICAL
+        text: "Single self-contained Python script per project — no GPU required"
+      - priority: CRITICAL
+        text: "Pipeline: INPUT → ANALYZE → SCENE_FN → TONEMAP → SHADE → ENCODE"
+      - priority: HIGH
+        text: "Never use canvas * N multipliers for brightness — use adaptive tonemap()"
+      - priority: HIGH
+        text: "Per-scene variation required: different background, palette, color strategy, shader intensity"
+      - priority: HIGH
+        text: "Invent at least one custom element per project: palette, effect, color, particle, or transition"
+      - priority: NORMAL
+        text: "Target: ~100-200ms/frame total; character render is the bottleneck at 80-150ms"
+    data:
+      - key: pipeline_stages
+        list_value:
+          items:
+            - { string_value: "INPUT — load/decode source material" }
+            - { string_value: "ANALYZE — extract per-frame features" }
+            - { string_value: "SCENE_FN — render to pixel canvas (uint8 H,W,3)" }
+            - { string_value: "TONEMAP — percentile-based adaptive brightness" }
+            - { string_value: "SHADE — ShaderChain + FeedbackBuffer post-processing" }
+            - { string_value: "ENCODE — pipe raw RGB to ffmpeg for H.264/GIF" }
+      - key: stack
+        map_value:
+          entries:
+            core: { string_value: "Python 3.10+, NumPy" }
+            signal: { string_value: "SciPy (FFT, peak detection)" }
+            imaging: { string_value: "Pillow (PIL)" }
+            video_io: { string_value: "ffmpeg (CLI)" }
+            parallel: { string_value: "concurrent.futures" }
+      - key: tonemap_function
+        string_value: "def tonemap(canvas, gamma=0.75): f = canvas.astype(np.float32); lo, hi = np.percentile(f[::4, ::4], [1, 99.5]); return (np.clip((f - lo) / (max(hi - lo, 10)), 0, 1) ** gamma * 255).astype(np.uint8)"
+
+  quality_verification:
+    description: Verify output quality before delivery
+    trigger_phrases: ["verify quality", "check output", "test frames"]
+    rules:
+      - priority: HIGH
+        text: "Test frames first: render single frames at key timestamps before full render"
+      - priority: HIGH
+        text: "Brightness check: canvas.mean() > 8 for all ASCII content"
+      - priority: NORMAL
+        text: "Visual coherence: do all scenes feel like they belong to the same video?"
+
+guardrails:
+  - text: "Single self-contained Python script — no external frameworks"
+    scope: ALWAYS
+  - text: "Verify brightness and visual coherence before delivering"
+    scope: ALWAYS
+
+related: []

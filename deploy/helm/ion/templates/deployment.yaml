@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ion.fullname" . }}
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ion.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ion.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "ion.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ion
+          image: {{ include "ion.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - dashboard
+            {{- range .Values.ion.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "ion.fullname" . }}-config
+          {{- if or .Values.ion.auth.existingSecret .Values.ion.extraEnv .Values.office.enabled }}
+          env:
+            {{- with .Values.ion.auth.existingSecret }}
+            - name: ION_AUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.ion.auth.usernameKey | quote }}
+            - name: ION_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.ion.auth.passwordKey | quote }}
+                  optional: true
+            - name: ION_AUTH_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.ion.auth.passwordHashKey | quote }}
+                  optional: true
+            {{- end }}
+            {{- if .Values.office.enabled }}
+            - name: ION_OFFICE_ENABLED
+              value: "true"
+            - name: ION_OFFICE_INTERNAL_URL
+              value: "http://{{ include "ion.fullname" . }}-office:{{ .Values.office.service.port }}"
+            - name: ION_OFFICE_PUBLIC_PATH
+              value: {{ .Values.office.publicPath | quote }}
+            - name: ION_OFFICE_CALLBACK_ORIGIN
+              value: {{ .Values.ion.origin | quote }}
+            - name: ION_OFFICE_MAX_FILE_BYTES
+              value: {{ .Values.office.maxFileBytes | quote }}
+            - name: ION_OFFICE_MAX_VERSIONS
+              value: {{ .Values.office.maxVersions | quote }}
+            - name: ION_OFFICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.office.jwt.existingSecret | quote }}
+                  key: {{ .Values.office.jwt.secretKey | quote }}
+            {{- end }}
+            {{- with .Values.ion.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.ion.dataDir }}
+          resources:
+            {{- toYaml .Values.resources.ion | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              host: 127.0.0.1
+              port: 4174
+            initialDelaySeconds: 10
+            periodSeconds: 15
+        - name: proxy
+          image: "{{ .Values.proxy.image.repository }}:{{ .Values.proxy.image.tag }}"
+          imagePullPolicy: {{ .Values.proxy.image.pullPolicy }}
+          args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.proxy.port }}
+          volumeMounts:
+            - name: proxy-config
+              mountPath: /etc/caddy
+              readOnly: true
+            - name: caddy-data
+              mountPath: /data
+            - name: caddy-config
+              mountPath: /config
+          resources:
+            {{- toYaml .Values.resources.proxy | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.proxy.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.proxy.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "ion.pvcName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: proxy-config
+          configMap:
+            name: {{ include "ion.fullname" . }}-proxy
+        - name: caddy-data
+          emptyDir: {}
+        - name: caddy-config
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

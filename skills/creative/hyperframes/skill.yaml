@@ -1,0 +1,118 @@
+skill:
+  name: hyperframes
+  version: 1.0.0
+  summary: HTML-driven video compositions — animated titles, overlays, captions, audio-reactive graphics
+  author: HeyGen
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [hyperframes, HTML video, video composition, animated title, video overlay, caption video]
+  intents: [create_html_video, render_composition, build_video_overlay]
+  patterns:
+    - "(create|make|build) .*(HTML|animated) .*(video|composition|title|overlay)"
+    - "(render|export) .*(HTML|composition) .*(MP4|WebM|video)"
+    - "hyperframes"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+  binaries: [node, npx, ffmpeg]
+
+provides:
+  capabilities: [html_video_composition, video_rendering, animated_titles, caption_overlay]
+  output_types: [.mp4, .webm]
+
+actions:
+
+  project_setup:
+    description: Initialize HyperFrames project
+    trigger_phrases: ["init hyperframes", "new project", "set up hyperframes"]
+    rules:
+      - priority: HIGH
+        text: "Requires Node.js 22+ and ffmpeg installed"
+      - priority: HIGH
+        text: "Init: npx hyperframes init my-video --non-interactive --example blank"
+      - priority: NORMAL
+        text: "Generates: index.html, meta.json, package.json, hyperframes.json"
+    data:
+      - key: init_command
+        string_value: "npx hyperframes init my-video --non-interactive --example blank"
+      - key: prereq_chrome_deps
+        string_value: "apt install -y unzip libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2"
+
+  create_composition:
+    description: Build HTML composition with timed clips and GSAP animations
+    trigger_phrases: ["create composition", "build composition", "design composition"]
+    rules:
+      - priority: CRITICAL
+        text: "Root element must have data-composition-id, data-width, data-height"
+      - priority: CRITICAL
+        text: "Every timed element needs class='clip' AND data-start, data-duration, data-track-index"
+      - priority: CRITICAL
+        text: "GSAP timeline needs { paused: true } and registered on window.__timelines"
+      - priority: HIGH
+        text: "Sub-composition files must NOT have data-composition-id — triggers 'multiple root' error"
+      - priority: HIGH
+        text: "No overlapping clips on same track — adjust timing or use different data-track-index"
+      - priority: HIGH
+        text: "Deterministic only — no Date.now(), Math.random(), or network fetches"
+      - priority: NORMAL
+        text: "Self-contained: inline styles, inline scripts, CDN-loaded libraries"
+    examples:
+      - label: "GSAP timeline registration"
+        language: javascript
+        code: |
+          const tl = gsap.timeline({ paused: true });
+          tl.from("#title", { opacity: 0, y: 40, duration: 0.8, ease: "power3.out" }, 0.6);
+          window.__timelines = window.__timelines || {};
+          window.__timelines["your-composition-id"] = tl;
+
+  render_video:
+    description: Render composition to MP4/WebM
+    trigger_phrases: ["render video", "export video", "render composition"]
+    rules:
+      - priority: HIGH
+        text: "Render: npx hyperframes render --output out.mp4"
+      - priority: HIGH
+        text: "Specific file: npx hyperframes render --composition foo.html --output foo.mp4"
+      - priority: HIGH
+        text: "--composition takes path relative to project directory — there is NO --input flag"
+      - priority: NORMAL
+        text: "Keep compositions under 10s for rapid iteration; merge with ffmpeg afterward"
+    data:
+      - key: render_command
+        string_value: "npx hyperframes render --output out.mp4"
+      - key: render_specific
+        string_value: "npx hyperframes render --composition foo.html --output foo.mp4"
+      - key: ffmpeg_concat
+        list_value:
+          items:
+            - { string_value: "ffmpeg -y -f concat -safe 0 -i concat.txt -c copy combined.mp4" }
+
+  validate:
+    description: Lint and validate project before rendering
+    trigger_phrases: ["lint hyperframes", "validate project", "check composition"]
+    rules:
+      - priority: HIGH
+        text: "Lint: npx hyperframes lint — pass DIRECTORY, not file"
+      - priority: NORMAL
+        text: "Preview: npx hyperframes preview before committing to full render"
+    data:
+      - key: lint_command
+        string_value: "npx hyperframes lint"
+      - key: preview_command
+        string_value: "npx hyperframes preview"
+
+guardrails:
+  - text: "Sub-composition files must NOT have data-composition-id"
+    scope: ALWAYS
+  - text: "No overlapping clips on the same track"
+    scope: ALWAYS
+  - text: "All content must be deterministic — no Date.now(), Math.random(), or network fetches"
+    scope: ALWAYS
+
+related: []

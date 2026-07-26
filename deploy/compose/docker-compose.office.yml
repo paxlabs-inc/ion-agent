@@ -1,0 +1,79 @@
+# Ion Office Studio - Docker Compose addition
+# Add this to your docker-compose.yml or include it via:
+#   docker compose -f docker-compose.yml -f docker-compose.office.yml up -d
+#
+# Requirements:
+#   - ION_OFFICE_JWT_SECRET must be generated and shared between services
+#   - ONLYOFFICE runs on a private network, not exposed publicly
+#   - Ion remains the public entry point
+#   - Minimum 4 GB RAM for ONLYOFFICE Docs Community
+#
+# Generate a JWT secret:
+#   openssl rand -hex 32
+
+services:
+  ion:
+    environment:
+      ION_OFFICE_ENABLED: "true"
+      ION_OFFICE_INTERNAL_URL: http://onlyoffice:80
+      ION_OFFICE_PUBLIC_PATH: /office-engine/
+      ION_OFFICE_CALLBACK_ORIGIN: ${ION_WEB_ORIGIN:?Set the exact HTTPS Ion origin}
+      ION_OFFICE_JWT_SECRET: ${ION_OFFICE_JWT_SECRET:?Set a generated Office JWT secret}
+      ION_OFFICE_MAX_FILE_BYTES: ${ION_OFFICE_MAX_FILE_BYTES:-104857600}
+      ION_OFFICE_MAX_VERSIONS: ${ION_OFFICE_MAX_VERSIONS:-100}
+    depends_on:
+      onlyoffice:
+        condition: service_healthy
+    networks:
+      - ion-internal
+
+  onlyoffice:
+    image: ${ION_OFFICE_IMAGE:-onlyoffice/documentserver:9.2.0.1}
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${ION_OFFICE_JWT_SECRET}
+      - JWT_HEADER=Authorization
+      - JWT_IN_BODY=true
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_log:/var/log/onlyoffice
+      - onlyoffice_lib:/var/lib/onlyoffice
+      - onlyoffice_rabbitmq:/var/lib/rabbitmq
+      - onlyoffice_postgresql:/var/lib/postgresql
+      - onlyoffice_redis:/var/lib/redis
+    networks:
+      - ion-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # Do NOT publish ports directly; traffic goes through Ion's proxy
+    # ports:
+    #   - "8080:80"  # DO NOT ENABLE - use Ion proxy instead
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+        limits:
+          memory: 4G
+    restart: unless-stopped
+
+volumes:
+  onlyoffice_data:
+    driver: local
+  onlyoffice_log:
+    driver: local
+  onlyoffice_lib:
+    driver: local
+  onlyoffice_rabbitmq:
+    driver: local
+  onlyoffice_postgresql:
+    driver: local
+  onlyoffice_redis:
+    driver: local
+
+networks:
+  ion-internal:
+    driver: bridge

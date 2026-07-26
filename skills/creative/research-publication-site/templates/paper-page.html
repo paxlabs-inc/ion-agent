@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title} — {lab_name}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .paper-content { max-width: var(--max-w-narrow); margin: 0 auto; padding: 0 var(--gutter); }
+    .paper-content p { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1rem; }
+    .paper-content .paper-section { font-family: var(--font-display); font-size: 1.4rem; font-weight: 400; color: var(--text-primary); margin: 3rem 0 1rem; letter-spacing: -0.01em; }
+    .paper-content .paper-subsection { font-family: var(--font-display); font-size: 1.15rem; font-weight: 400; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    .paper-abstract { font-size: 0.92rem; color: var(--text-secondary); line-height: 1.85; padding: 2rem; background: var(--bg-1); border-left: 2px solid var(--accent); margin: 2rem 0; }
+    .paper-abstract p { margin-bottom: 0.75rem; }
+    .paper-abstract p:last-child { margin-bottom: 0; }
+    .paper-back { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-tertiary); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2rem; transition: color 0.25s; }
+    .paper-back:hover { color: var(--accent); }
+    .paper-cite { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-tertiary); padding: 1.5rem; background: var(--bg-1); border: 1px solid rgba(255,255,255,0.04); border-radius: 4px; margin-top: 3rem; line-height: 1.8; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="index.html" class="nav-logo">{lab_name}</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="research.html">Research</a></li>
+    <li><a href="about.html">About</a></li>
+  </ul>
+  <button class="nav-mobile" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<header class="page-header">
+  <div class="page-header-inner">
+    <a href="research.html" class="paper-back">← All Research</a>
+    <p class="section-label">{lab_name}</p>
+    <h1>{title}</h1>
+    <p style="margin-top:1rem; font-size:0.92rem; color:var(--text-tertiary); font-family:var(--font-mono); letter-spacing:0.03em;">
+      {authors} · {affiliation}
+    </p>
+  </div>
+</header>
+
+<section class="page-pad">
+  <div class="paper-content reveal">
+    <!-- AUTO-PARSED PAPER CONTENT GOES HERE -->
+    <!-- Use the regex patterns from the skill to convert .txt to structured HTML -->
+    {parsed_html_content}
+
+    <div class="paper-cite">
+      <strong>Citation:</strong> {authors}. "{title}." {lab_name}, {year}. Correspondence: {contact_email}
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="cta-inner reveal">
+    <h2>Continue <em>reading</em></h2>
+    <p>Explore more research from {lab_name}.</p>
+    <div class="cta-actions">
+      <a href="research.html" class="btn-primary">All papers</a>
+      <a href="index.html" class="btn-ghost">Home</a>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="nav-logo" style="font-size:1.1rem;">{lab_name}</span>
+      <p>{lab_tagline}</p>
+    </div>
+    <div class="footer-col">
+      <h5>Research</h5>
+      <ul>
+        <li><a href="research.html">All Papers</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Lab</h5>
+      <ul>
+        <li><a href="about.html">About</a></li>
+        <li><a href="mailto:{contact_email}">Contact</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© {year_range} {org_name}. All papers open access.</p>
+    <p>Correspondence: {contact_email}</p>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

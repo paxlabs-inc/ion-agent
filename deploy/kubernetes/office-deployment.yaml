@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onlyoffice-documentserver
+  namespace: ion
+  labels:
+    app: onlyoffice
+    component: document-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: onlyoffice
+      component: document-server
+  template:
+    metadata:
+      labels:
+        app: onlyoffice
+        component: document-server
+    spec:
+      containers:
+        - name: onlyoffice
+          image: onlyoffice/documentserver:9.2.0.1  # Pin version
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: JWT_ENABLED
+              value: "true"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ion-office-secrets
+                  key: jwt-secret
+            - name: JWT_HEADER
+              value: "Authorization"
+            - name: JWT_IN_BODY
+              value: "true"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: onlyoffice-data
+              mountPath: /var/www/onlyoffice/Data
+            - name: onlyoffice-lib
+              mountPath: /var/lib/onlyoffice
+            - name: onlyoffice-log
+              mountPath: /var/log/onlyoffice
+      volumes:
+        - name: onlyoffice-data
+          persistentVolumeClaim:
+            claimName: onlyoffice-data
+        - name: onlyoffice-lib
+          persistentVolumeClaim:
+            claimName: onlyoffice-lib
+        - name: onlyoffice-log
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: onlyoffice
+  namespace: ion
+  labels:
+    app: onlyoffice
+    component: document-server
+spec:
+  type: ClusterIP  # Private networking only
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: onlyoffice
+    component: document-server
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: onlyoffice-data
+  namespace: ion
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 40Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: onlyoffice-lib
+  namespace: ion
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

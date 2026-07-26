@@ -1,0 +1,12 @@
+[build]
+cmd = "./bin/ion dashboard --data-dir .ion --dev-file-kek"
+bin = "/tmp/ion-dev"
+include_dir = ["."]
+include_ext = ["go", "sql"]
+exclude_dir = ["vendor", "hnsw-service", "node_modules", ".git", "bin", "ui"]
+exclude_regex = ["_test\\.go$"]
+delay = 1000
+stop_on_error = false
+log = "air.log"
+send_interrupt = true
+kill_delay = "500ms"

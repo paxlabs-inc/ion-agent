@@ -1,0 +1,141 @@
+skill:
+  name: baoyu-infographic
+  version: 1.56.1
+  summary: Generate infographics with 21 layouts x 21 styles — visual summaries and information graphics
+  author: 宝玉 (JimLiu)
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [infographic, visual summary, information graphic, 信息图, 可视化, 高密度信息大图]
+  intents: [create_infographic, visual_summary, information_graphic]
+  patterns:
+    - "(create|make|generate) .*(infographic|visual summary|information graphic)"
+    - "信息图|可视化|高密度信息大图"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: image_generate
+      required: true
+
+provides:
+  capabilities: [infographic_generation, layout_style_combinations, visual_summaries]
+  output_types: [.png, .md]
+
+actions:
+
+  analyze_content:
+    description: Analyze source content for topic, data type, complexity, tone, audience
+    trigger_phrases: ["analyze content", "analyze source", "review content"]
+    rules:
+      - priority: CRITICAL
+        text: "Preserve source data faithfully — no summarization or rephrasing"
+      - priority: CRITICAL
+        text: "Strip any credentials, API keys, tokens, or secrets before including in outputs"
+      - priority: HIGH
+        text: "Save source content to source.md; if exists, rename to backup with timestamp"
+      - priority: NORMAL
+        text: "Detect source language and user language"
+    data:
+      - key: output_structure
+        list_value:
+          items:
+            - { string_value: "source-{slug}.{ext}" }
+            - { string_value: "analysis.md" }
+            - { string_value: "structured-content.md" }
+            - { string_value: "prompts/infographic.md" }
+            - { string_value: "infographic.png" }
+
+  recommend_combinations:
+    description: Recommend layout x style combinations based on content analysis
+    trigger_phrases: ["recommend layout", "suggest style", "pick combination"]
+    rules:
+      - priority: HIGH
+        text: "Check keyword shortcuts first: 高密度信息大图 → dense-modules; 信息图 → bento-grid"
+      - priority: HIGH
+        text: "Default: bento-grid + craft-handmade"
+      - priority: NORMAL
+        text: "Recommend 3-5 combinations based on data structure, content tone, audience expectations"
+    data:
+      - key: default_layout
+        string_value: "bento-grid"
+      - key: default_style
+        string_value: "craft-handmade"
+      - key: layouts
+        list_value:
+          items:
+            - { string_value: "linear-progression" }
+            - { string_value: "binary-comparison" }
+            - { string_value: "comparison-matrix" }
+            - { string_value: "hierarchical-layers" }
+            - { string_value: "tree-branching" }
+            - { string_value: "hub-spoke" }
+            - { string_value: "structural-breakdown" }
+            - { string_value: "bento-grid" }
+            - { string_value: "iceberg" }
+            - { string_value: "bridge" }
+            - { string_value: "funnel" }
+            - { string_value: "isometric-map" }
+            - { string_value: "dashboard" }
+            - { string_value: "periodic-table" }
+            - { string_value: "comic-strip" }
+            - { string_value: "story-mountain" }
+            - { string_value: "jigsaw" }
+            - { string_value: "venn-diagram" }
+            - { string_value: "winding-roadmap" }
+            - { string_value: "circular-flow" }
+            - { string_value: "dense-modules" }
+      - key: styles
+        list_value:
+          items:
+            - { string_value: "craft-handmade" }
+            - { string_value: "claymation" }
+            - { string_value: "kawaii" }
+            - { string_value: "storybook-watercolor" }
+            - { string_value: "chalkboard" }
+            - { string_value: "cyberpunk-neon" }
+            - { string_value: "bold-graphic" }
+            - { string_value: "aged-academia" }
+            - { string_value: "corporate-memphis" }
+            - { string_value: "technical-schematic" }
+            - { string_value: "origami" }
+            - { string_value: "pixel-art" }
+            - { string_value: "ui-wireframe" }
+            - { string_value: "subway-map" }
+            - { string_value: "ikea-manual" }
+            - { string_value: "knolling" }
+            - { string_value: "lego-brick" }
+            - { string_value: "pop-laboratory" }
+            - { string_value: "morandi-journal" }
+            - { string_value: "retro-pop-grid" }
+            - { string_value: "hand-drawn-edu" }
+
+  generate_image:
+    description: Assemble prompt and generate infographic image
+    trigger_phrases: ["generate infographic", "create infographic", "make infographic"]
+    rules:
+      - priority: HIGH
+        text: "Load layout definition from references/layouts/<layout>.md and style from references/styles/<style>.md"
+      - priority: HIGH
+        text: "Combine layout + style + base template + structured content + confirmed language"
+      - priority: NORMAL
+        text: "Aspect ratio: landscape (16:9), portrait (9:16), square (1:1) — map to image_generate format"
+    data:
+      - key: aspect_ratios
+        map_value:
+          entries:
+            landscape: { string_value: "16:9" }
+            portrait: { string_value: "9:16" }
+            square: { string_value: "1:1" }
+
+guardrails:
+  - text: "Data integrity is paramount — never summarize or alter source statistics"
+    scope: ALWAYS
+  - text: "Strip secrets from all output files"
+    scope: ALWAYS
+  - text: "Style consistency — apply one style across entire infographic"
+    scope: ALWAYS
+
+related: []

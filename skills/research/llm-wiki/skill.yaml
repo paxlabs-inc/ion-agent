@@ -1,0 +1,173 @@
+skill:
+  name: llm-wiki
+  version: 2.1.0
+  summary: "Karpathy's LLM Wiki: build and query interlinked markdown knowledge base"
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [wiki, knowledge base, llm wiki, karpathy wiki, interlinked notes, rag alternative]
+  intents: [create_wiki, ingest_source, query_wiki, lint_wiki, build_knowledge_base]
+  patterns:
+    - "(create|build|start) .*(wiki|knowledge base)"
+    - "(ingest|add|process) .*(source|article|paper).*wiki"
+    - "(lint|audit|health.?check) .*(wiki|knowledge base)"
+    - "wiki .*(query|search|question)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+    - name: read_file
+      required: true
+    - name: web_extract
+      required: false
+  optional_env: [WIKI_PATH]
+
+provides:
+  capabilities: [knowledge_base_management, source_ingestion, wiki_querying, wiki_linting, cross_referencing]
+  output_types: [.md]
+
+actions:
+
+  initialize_wiki:
+    description: Create a new wiki with directory structure, schema, and index
+    trigger_phrases: ["create a wiki", "start a wiki", "initialize wiki", "new knowledge base"]
+    rules:
+      - priority: CRITICAL
+        text: "Wiki location from WIKI_PATH env var, default ~/wiki"
+      - priority: CRITICAL
+        text: "Create three layers: raw/ (immutable sources), entities/ + concepts/ + comparisons/ + queries/ (agent-owned), SCHEMA.md (conventions)"
+      - priority: HIGH
+        text: "Ask user what domain the wiki covers before writing SCHEMA.md"
+      - priority: HIGH
+        text: "SCHEMA.md must define: domain, file naming conventions, frontmatter format, tag taxonomy, page thresholds, update policy"
+      - priority: HIGH
+        text: "Initial files: SCHEMA.md, index.md (sectioned catalog), log.md (creation entry)"
+      - priority: NORMAL
+        text: "Suggest first sources to ingest after wiki is ready"
+    data:
+      - key: directory_structure
+        map_value:
+          entries:
+            schema: { string_value: "SCHEMA.md" }
+            index: { string_value: "index.md" }
+            log: { string_value: "log.md" }
+            raw_articles: { string_value: "raw/articles/" }
+            raw_papers: { string_value: "raw/papers/" }
+            raw_transcripts: { string_value: "raw/transcripts/" }
+            raw_assets: { string_value: "raw/assets/" }
+            entities: { string_value: "entities/" }
+            concepts: { string_value: "concepts/" }
+            comparisons: { string_value: "comparisons/" }
+            queries: { string_value: "queries/" }
+
+  orient_to_wiki:
+    description: Read schema, index, and recent log before any wiki operation
+    trigger_phrases: ["resume wiki", "open wiki", "continue working on wiki"]
+    rules:
+      - priority: CRITICAL
+        text: "ALWAYS read SCHEMA.md, index.md, and recent log.md (last 20-30 entries) before any operation in a new session"
+      - priority: CRITICAL
+        text: "Skipping orientation causes duplicates, missed cross-references, and schema violations"
+      - priority: HIGH
+        text: "For large wikis (100+ pages): also search_files for the topic before creating anything new"
+    data:
+      - key: orientation_reads
+        list_value:
+          items:
+            - { string_value: "SCHEMA.md — domain, conventions, tag taxonomy" }
+            - { string_value: "index.md — existing pages and summaries" }
+            - { string_value: "log.md — recent activity (last 20-30 entries)" }
+
+  ingest_source:
+    description: Integrate a source (URL, file, paste) into the wiki
+    trigger_phrases: ["ingest source", "add to wiki", "process article", "add source"]
+    rules:
+      - priority: CRITICAL
+        text: "Step 1: Capture raw source (URL→web_extract→raw/articles/, PDF→raw/papers/) with source_url, ingested, sha256 frontmatter"
+      - priority: CRITICAL
+        text: "Step 2: Check existing pages before creating new ones — search index.md and search_files"
+      - priority: CRITICAL
+        text: "Step 3: Create/update wiki pages only if entities meet Page Thresholds (2+ source mentions or central to one source)"
+      - priority: HIGH
+        text: "Every new/updated page must link to at least 2 other pages via [[wikilinks]]"
+      - priority: HIGH
+        text: "Update index.md, log.md after every ingest"
+      - priority: HIGH
+        text: "On re-ingest of same URL: recompute sha256, skip if identical, flag drift if different"
+      - priority: NORMAL
+        text: "Provenance markers: on pages synthesizing 3+ sources, append ^[raw/articles/source.md] to sourced paragraphs"
+      - priority: NORMAL
+        text: "Set confidence field in frontmatter for opinion-heavy or single-source claims"
+    data:
+      - key: page_types
+        list_value:
+          items:
+            - { string_value: entity }
+            - { string_value: concept }
+            - { string_value: comparison }
+            - { string_value: query }
+            - { string_value: summary }
+      - key: frontmatter_fields
+        list_value:
+          items:
+            - { string_value: "title" }
+            - { string_value: "created" }
+            - { string_value: "updated" }
+            - { string_value: "type" }
+            - { string_value: "tags" }
+            - { string_value: "sources" }
+            - { string_value: "confidence" }
+            - { string_value: "contested" }
+            - { string_value: "contradictions" }
+
+  query_wiki:
+    description: Answer questions using wiki knowledge base
+    trigger_phrases: ["ask the wiki", "wiki search", "what does the wiki say about"]
+    rules:
+      - priority: HIGH
+        text: "Read index.md to identify relevant pages, then read those pages"
+      - priority: HIGH
+        text: "For wikis with 100+ pages: also search_files across all .md files for key terms"
+      - priority: HIGH
+        text: "Synthesize answer from compiled knowledge, cite wiki pages: 'Based on [[page-a]] and [[page-b]]...'"
+      - priority: NORMAL
+        text: "File valuable answers back — create queries/ or comparisons/ page for substantial syntheses"
+      - priority: NORMAL
+        text: "Update log.md with query and whether it was filed"
+
+  lint_wiki:
+    description: Audit wiki for orphans, broken links, staleness, contradictions
+    trigger_phrases: ["lint wiki", "health check wiki", "audit wiki"]
+    rules:
+      - priority: HIGH
+        text: "Check: orphan pages (no inbound wikilinks), broken wikilinks, index completeness, frontmatter validation"
+      - priority: HIGH
+        text: "Check: stale content (>90 days since last update), contradictions (pages with contested:true), confidence:low pages"
+      - priority: HIGH
+        text: "Check: source drift (recompute sha256 for raw/ files), page size (>200 lines), tag audit (all tags in taxonomy)"
+      - priority: NORMAL
+        text: "Report grouped by severity: broken links > orphans > source drift > contested pages > stale content > style"
+      - priority: NORMAL
+        text: "Rotate log.md if >500 entries: rename to log-YYYY.md, start fresh"
+
+guardrails:
+  - text: "Never modify files in raw/ — sources are immutable. Corrections go in wiki pages"
+    scope: ALWAYS
+  - text: "Always orient first: read SCHEMA + index + recent log before any wiki operation"
+    scope: ALWAYS
+  - text: "Always update index.md and log.md after every wiki operation"
+    scope: ALWAYS
+  - text: "Every wiki page must have frontmatter and at least 2 outbound [[wikilinks]]"
+    scope: ALWAYS
+  - text: "Tags must come from SCHEMA.md taxonomy — add new tags there first, then use them"
+    scope: ALWAYS
+
+related:
+  - name: arxiv
+    relationship: composes_with
+    description: "Search arXiv for papers to ingest into wiki"

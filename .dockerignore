@@ -1,0 +1,11 @@
+.git
+.ion
+bin
+hnsw-service/target
+node_modules
+research
+temp
+ui/node_modules
+ui/web/dist
+ui/web/playwright-report
+ui/web/test-results

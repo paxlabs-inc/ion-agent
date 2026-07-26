@@ -1,0 +1,107 @@
+skill:
+  name: openhue
+  version: 1.0.0
+  summary: Control Philips Hue lights, scenes, rooms via OpenHue CLI
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [hue, lights, philips hue, openhue, smart lights, smart home]
+  intents: [control_lights, set_scene, dim_lights, change_color, control_rooms]
+  patterns:
+    - "(turn|switch) .*(light|lights|lamp|lamps) .*(on|off)"
+    - "(dim|brighten|set) .*(light|lights|room)"
+    - "(set|activate) .*(scene|movie mode|relax|concentrate)"
+    - "(change|set) .*(color|colour|temperature) .*(light|lights)"
+    - "hue"
+
+requires:
+  binaries: [openhue]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [hue_light_control, hue_room_control, hue_scene_control]
+  output_types: []
+
+actions:
+
+  list_resources:
+    description: List available Hue lights, rooms, and scenes
+    trigger_phrases: ["list lights", "show rooms", "what scenes", "hue devices"]
+    rules:
+      - priority: HIGH
+        text: "Use openhue get light/room/scene to list resources"
+      - priority: HIGH
+        text: "Light and room names are case-sensitive — verify exact names before setting"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            lights: { string_value: "openhue get light" }
+            rooms: { string_value: "openhue get room" }
+            scenes: { string_value: "openhue get scene" }
+
+  control_lights:
+    description: Turn on/off, dim, or change color of individual lights
+    trigger_phrases: ["turn on light", "turn off light", "dim light", "set light color"]
+    rules:
+      - priority: HIGH
+        text: "Use openhue set light 'Name' --on/--off --brightness N --temperature N --color NAME"
+      - priority: HIGH
+        text: "Color settings only apply to color-capable bulbs (white-only models ignore them)"
+      - priority: NORMAL
+        text: "Brightness: 0-100, Temperature: 153-500 mirek (warm to cool), Color: name or hex"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            on: { string_value: 'openhue set light "Bedroom Lamp" --on' }
+            off: { string_value: 'openhue set light "Bedroom Lamp" --off' }
+            brightness: { string_value: 'openhue set light "Bedroom Lamp" --on --brightness 50' }
+            temperature: { string_value: 'openhue set light "Bedroom Lamp" --on --temperature 300' }
+            color_name: { string_value: 'openhue set light "Bedroom Lamp" --on --color red' }
+            color_hex: { string_value: 'openhue set light "Bedroom Lamp" --on --rgb "#FF5500"' }
+
+  control_rooms:
+    description: Control all lights in a room
+    trigger_phrases: ["turn off room", "dim room", "room lights"]
+    rules:
+      - priority: HIGH
+        text: "Use openhue set room 'Name' --on/--off --brightness N"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            off: { string_value: 'openhue set room "Bedroom" --off' }
+            brightness: { string_value: 'openhue set room "Bedroom" --on --brightness 30' }
+
+  set_scene:
+    description: Activate a Hue scene in a room
+    trigger_phrases: ["set scene", "movie mode", "relax mode", "activate scene"]
+    rules:
+      - priority: HIGH
+        text: "Use openhue set scene 'Scene Name' --room 'Room Name'"
+      - priority: NORMAL
+        text: "Quick presets: bedtime=20%+450mirek, work=100%+250mirek, movie=10%"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            set_scene: { string_value: 'openhue set scene "Relax" --room "Bedroom"' }
+            bedtime: { string_value: 'openhue set room "Bedroom" --on --brightness 20 --temperature 450' }
+            work: { string_value: 'openhue set room "Office" --on --brightness 100 --temperature 250' }
+            movie: { string_value: 'openhue set room "Living Room" --on --brightness 10' }
+            all_off: { string_value: 'openhue set room "Bedroom" --off && openhue set room "Office" --off' }
+
+guardrails:
+  - text: "Bridge must be on the same local network as the machine"
+    scope: ALWAYS
+  - text: "Light and room names are case-sensitive — verify exact names with get commands first"
+    scope: ALWAYS
+  - text: "Initial setup requires physically pressing the button on the Hue Bridge"
+    scope: AUTH_OPS
+
+related: []

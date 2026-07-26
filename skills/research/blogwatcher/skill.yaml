@@ -1,0 +1,103 @@
+skill:
+  name: blogwatcher
+  version: 2.0.0
+  summary: "Monitor blogs and RSS/Atom feeds via blogwatcher-cli tool"
+  author: "JulienTant (fork of Hyaxia/blogwatcher)"
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [blogwatcher, rss, atom feed, blog monitor, feed reader, opml]
+  intents: [monitor_blogs, scan_feeds, manage_subscriptions, read_articles]
+  patterns:
+    - "(monitor|track|watch) .*(blog|feed|rss)"
+    - "blogwatcher"
+    - "(add|import|scan) .*(feed|blog|rss)"
+
+requires:
+  binaries: [blogwatcher-cli]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [blog_monitoring, rss_feed_reading, article_tracking, opml_import]
+  output_types: []
+
+actions:
+
+  install:
+    description: Install blogwatcher-cli binary
+    trigger_phrases: ["install blogwatcher", "set up blogwatcher"]
+    rules:
+      - priority: HIGH
+        text: "Go install: go install github.com/JulienTant/blogwatcher-cli/cmd/blogwatcher-cli@latest"
+      - priority: HIGH
+        text: "Binary download: curl the platform-specific tarball from GitHub releases to /usr/local/bin"
+      - priority: HIGH
+        text: "Docker: docker run --rm -v blogwatcher-cli:/data ghcr.io/julientant/blogwatcher-cli"
+      - priority: NORMAL
+        text: "Docker persistent storage: use BLOGWATCHER_DB env or named volume for database"
+    data:
+      - key: install_commands
+        map_value:
+          entries:
+            go: { string_value: "go install github.com/JulienTant/blogwatcher-cli/cmd/blogwatcher-cli@latest" }
+            docker: { string_value: "docker run --rm -v blogwatcher-cli:/data ghcr.io/julientant/blogwatcher-cli" }
+      - key: releases_url
+        string_value: "https://github.com/JulienTant/blogwatcher-cli/releases"
+      - key: default_db_path
+        string_value: "~/.blogwatcher-cli/blogwatcher-cli.db"
+
+  manage_blogs:
+    description: Add, remove, list, and import blogs
+    trigger_phrases: ["add blog", "remove blog", "list blogs", "import opml"]
+    rules:
+      - priority: HIGH
+        text: "Add blog: blogwatcher-cli add 'My Blog' https://example.com"
+      - priority: HIGH
+        text: "Add with explicit feed: blogwatcher-cli add 'My Blog' URL --feed-url FEED_URL"
+      - priority: HIGH
+        text: "Add with HTML scraping fallback: blogwatcher-cli add 'My Blog' URL --scrape-selector 'article h2 a'"
+      - priority: NORMAL
+        text: "List tracked: blogwatcher-cli blogs | Remove: blogwatcher-cli remove 'Name' --yes"
+      - priority: NORMAL
+        text: "Import OPML: blogwatcher-cli import subscriptions.opml"
+    data:
+      - key: env_vars
+        map_value:
+          entries:
+            BLOGWATCHER_DB: { string_value: "Path to SQLite database file" }
+            BLOGWATCHER_WORKERS: { string_value: "Concurrent scan workers (default: 8)" }
+            BLOGWATCHER_SILENT: { string_value: "Only output 'scan done' when scanning" }
+            BLOGWATCHER_YES: { string_value: "Skip confirmation prompts" }
+
+  scan_and_read:
+    description: Scan feeds for new articles and manage read/unread state
+    trigger_phrases: ["scan blogs", "check feeds", "new articles", "unread articles"]
+    rules:
+      - priority: HIGH
+        text: "Scan all: blogwatcher-cli scan | Scan one: blogwatcher-cli scan 'Blog Name'"
+      - priority: HIGH
+        text: "List unread: blogwatcher-cli articles | List all: blogwatcher-cli articles --all"
+      - priority: HIGH
+        text: "Filter by blog: --blog 'Name' | Filter by category: --category 'Category'"
+      - priority: NORMAL
+        text: "Mark read: blogwatcher-cli read ID | Mark unread: blogwatcher-cli unread ID"
+      - priority: NORMAL
+        text: "Mark all read: blogwatcher-cli read-all [--blog 'Name' --yes]"
+    examples:
+      - label: "scan and list new articles"
+        language: bash
+        code: |
+          blogwatcher-cli scan
+          blogwatcher-cli articles
+          blogwatcher-cli articles --blog "Engineering" --category "Tech"
+
+guardrails:
+  - text: "Database defaults to ~/.blogwatcher-cli/blogwatcher-cli.db — override with BLOGWATCHER_DB"
+    scope: ALWAYS
+  - text: "From original blogwatcher migration: mv ~/.blogwatcher/blogwatcher.db ~/.blogwatcher-cli/blogwatcher-cli.db"
+    scope: ALWAYS
+
+related: []

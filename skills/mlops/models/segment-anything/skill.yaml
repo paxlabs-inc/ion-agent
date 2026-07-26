@@ -1,0 +1,196 @@
+skill:
+  name: segment-anything-model
+  version: 1.0.0
+  summary: "SAM: zero-shot image segmentation via points, boxes, or masks"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [segment anything, sam, image segmentation, object segmentation, zero-shot segmentation, mask generation, sam predictor]
+  intents: [segment_image, generate_masks, interactive_segmentation, automatic_segmentation]
+  patterns:
+    - "(segment|cut.?out|extract) .*(object|region|image|mask)"
+    - "(sam|segment.anything)"
+    - "(zero.?shot|automatic) .*(segmentation|mask)"
+    - "(point|box|bounding.box) .*(prompt|segment|select)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [pip, python3]
+
+provides:
+  capabilities: [image_segmentation, automatic_mask_generation, interactive_segmentation, onnx_deployment]
+  output_types: [.png, .onnx]
+
+actions:
+
+  install:
+    description: Install SAM and download model checkpoints
+    trigger_phrases: ["install sam", "set up segment anything", "download sam model"]
+    rules:
+      - priority: HIGH
+        text: "pip install git+https://github.com/facebookresearch/segment-anything.git"
+      - priority: HIGH
+        text: "Optional: pip install opencv-python pycocotools matplotlib"
+      - priority: HIGH
+        text: "Alternative: pip install transformers for HuggingFace integration"
+      - priority: NORMAL
+        text: "Three model sizes: ViT-B (375MB, fastest), ViT-L (1.2GB), ViT-H (2.4GB, most accurate)"
+    data:
+      - key: install_command
+        string_value: "pip install git+https://github.com/facebookresearch/segment-anything.git"
+      - key: model_checkpoints
+        map_value:
+          entries:
+            vit_h: { string_value: "sam_vit_h_4b8939.pth (2.4GB, best accuracy)" }
+            vit_l: { string_value: "sam_vit_l_0b3195.pth (1.2GB, balanced)" }
+            vit_b: { string_value: "sam_vit_b_01ec64.pth (375MB, fastest)" }
+
+  point_segmentation:
+    description: Segment objects using point prompts
+    trigger_phrases: ["segment with point", "click to segment", "select object by clicking", "point prompt segmentation"]
+    rules:
+      - priority: CRITICAL
+        text: "Points are (x, y) coordinates with labels: 1=foreground, 0=background"
+      - priority: HIGH
+        text: "multimask_output=True returns 3 mask options; select best by score"
+      - priority: HIGH
+        text: "Call predictor.set_image() once, then predict() multiple times for same image"
+      - priority: NORMAL
+        text: "Combine foreground and background points for precise control"
+    examples:
+      - label: "single point segmentation"
+        language: python
+        code: |
+          import numpy as np
+          from segment_anything import sam_model_registry, SamPredictor
+          sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
+          sam.to(device="cuda")
+          predictor = SamPredictor(sam)
+          predictor.set_image(image)
+          input_point = np.array([[500, 375]])
+          input_label = np.array([1])
+          masks, scores, logits = predictor.predict(
+              point_coords=input_point, point_labels=input_label, multimask_output=True
+          )
+          best_mask = masks[np.argmax(scores)]
+      - label: "foreground + background points"
+        language: python
+        code: |
+          input_points = np.array([[500, 375], [600, 400], [450, 300]])
+          input_labels = np.array([1, 1, 0])
+          masks, scores, logits = predictor.predict(
+              point_coords=input_points, point_labels=input_labels, multimask_output=False
+          )
+
+  box_segmentation:
+    description: Segment objects using bounding box prompts
+    trigger_phrases: ["segment with box", "bounding box segmentation", "box prompt", "rectangle selection"]
+    rules:
+      - priority: HIGH
+        text: "Box format: [x1, y1, x2, y2]"
+      - priority: HIGH
+        text: "Use multimask_output=False for box prompts"
+      - priority: NORMAL
+        text: "Combine box + points for more precise control"
+    examples:
+      - label: "box prompt segmentation"
+        language: python
+        code: |
+          input_box = np.array([425, 600, 700, 875])
+          masks, scores, logits = predictor.predict(box=input_box, multimask_output=False)
+      - label: "box + points combined"
+        language: python
+        code: |
+          masks, scores, logits = predictor.predict(
+              point_coords=np.array([[500, 375]]),
+              point_labels=np.array([1]),
+              box=np.array([400, 300, 700, 600]),
+              multimask_output=False
+          )
+
+  automatic_segmentation:
+    description: Generate all object masks automatically
+    trigger_phrases: ["automatic segmentation", "segment everything", "generate all masks", "auto mask"]
+    rules:
+      - priority: HIGH
+        text: "Use SamAutomaticMaskGenerator for zero-prompt segmentation"
+      - priority: HIGH
+        text: "Filter by predicted_iou and stability_score for quality"
+      - priority: NORMAL
+        text: "points_per_side=32 default; reduce for speed, increase for more masks"
+    data:
+      - key: mask_output_fields
+        list_value:
+          items:
+            - { string_value: "segmentation: H×W binary mask" }
+            - { string_value: "bbox: [x, y, w, h]" }
+            - { string_value: "area: pixel count" }
+            - { string_value: "predicted_iou: 0-1 quality score" }
+            - { string_value: "stability_score: 0-1 robustness score" }
+    examples:
+      - label: "automatic mask generation"
+        language: python
+        code: |
+          from segment_anything import SamAutomaticMaskGenerator
+          mask_generator = SamAutomaticMaskGenerator(sam)
+          masks = mask_generator.generate(image)
+          high_quality = [m for m in masks if m['predicted_iou'] > 0.9]
+
+  iterative_refinement:
+    description: Refine segmentation with additional prompts
+    trigger_phrases: ["refine segmentation", "improve mask", "add more points"]
+    rules:
+      - priority: HIGH
+        text: "Pass previous mask logits via mask_input parameter for refinement"
+      - priority: NORMAL
+        text: "Add background points (label=0) to exclude regions"
+    examples:
+      - label: "iterative refinement"
+        language: python
+        code: |
+          # Initial prediction
+          masks, scores, logits = predictor.predict(
+              point_coords=np.array([[500, 375]]), point_labels=np.array([1]), multimask_output=True
+          )
+          # Refine with additional background point
+          masks, scores, logits = predictor.predict(
+              point_coords=np.array([[500, 375], [550, 400]]),
+              point_labels=np.array([1, 0]),
+              mask_input=logits[np.argmax(scores)][None, :, :],
+              multimask_output=False
+          )
+
+  onnx_deployment:
+    description: Export SAM to ONNX for browser/edge deployment
+    trigger_phrases: ["export sam onnx", "onnx deployment", "browser segmentation"]
+    rules:
+      - priority: HIGH
+        text: "Use scripts/export_onnx_model.py with --return-single-mask for faster inference"
+      - priority: NORMAL
+        text: "ONNX model takes pre-computed image embeddings"
+    examples:
+      - label: "onnx export"
+        language: bash
+        code: |
+          python scripts/export_onnx_model.py \
+            --checkpoint sam_vit_h_4b8939.pth \
+            --model-type vit_h \
+            --output sam_onnx.onnx \
+            --return-single-mask
+
+guardrails:
+  - text: "ViT-B for limited VRAM; ViT-H for best accuracy — don't default to ViT-H without checking GPU"
+    scope: ALWAYS
+  - text: "Always call predictor.set_image() before predict() — computes embeddings once per image"
+    scope: ALWAYS
+  - text: "Filter masks by stability_score > 0.95 and predicted_iou > 0.88 for quality"
+    scope: ALWAYS
+
+related:
+  - name: audiocraft-audio-generation
+    relationship: composes_with
+    description: "Both use Meta AI models; SAM for visual, AudioCraft for audio"

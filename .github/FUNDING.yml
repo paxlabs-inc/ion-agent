@@ -1,0 +1,8 @@
+# Ion funding configuration.
+# Uncomment and fill in the platforms you actually use.
+
+github: [paxlabs-inc]
+# open_collective:
+# patreon:
+# ko_fi:
+# custom: ["https://matrixmcl.com/sponsor"]

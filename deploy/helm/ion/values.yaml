@@ -1,0 +1,135 @@
+# Default values for the Ion chart.
+
+image:
+  repository: ghcr.io/paxlabs-inc/ion-agent
+  tag: ""  # defaults to .Chart.appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Ion is a single persistent identity backed by a ReadWriteOnce volume.
+# Do not increase replicaCount.
+replicaCount: 1
+
+ion:
+  dataDir: /data
+  # Plain HTTP binds loopback only; the proxy sidecar reaches it in-Pod.
+  listen: 127.0.0.1:4174
+  # Exact public HTTPS origin used for browser origin enforcement.
+  origin: https://ion.example.com
+  auth:
+    # Required for remote access. The Secret must contain username and exactly
+    # one of password or passwordHash.
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+    passwordHashKey: passwordHash
+  # Auto-init is off by default. Initialize the vault yourself. See README.
+  autoInit: false
+  extraArgs: []
+  extraEnv: []
+
+proxy:
+  image:
+    repository: caddy
+    tag: 2.8-alpine
+    pullPolicy: IfNotPresent
+  port: 8080
+
+office:
+  enabled: false
+  image:
+    repository: onlyoffice/documentserver
+    tag: "9.2.0.1"
+    pullPolicy: IfNotPresent
+  jwt:
+    existingSecret: ion-office-secrets
+    secretKey: jwt-secret
+  publicPath: /office-engine/
+  maxFileBytes: 104857600
+  maxVersions: 100
+  service:
+    port: 80
+  persistence:
+    enabled: true
+    dataSize: 40Gi
+    libSize: 10Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  podSecurityContext: {}
+  securityContext: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: ion.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - ion.example.com
+      secretName: ion-tls
+
+persistence:
+  enabled: true
+  size: 10Gi
+  accessMode: ReadWriteOnce
+  storageClass: ""
+  existingClaim: ""
+
+resources:
+  ion:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  proxy:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

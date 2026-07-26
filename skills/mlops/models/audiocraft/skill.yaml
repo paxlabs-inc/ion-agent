@@ -1,0 +1,172 @@
+skill:
+  name: audiocraft-audio-generation
+  version: 1.0.0
+  summary: "AudioCraft: MusicGen text-to-music, AudioGen text-to-sound, EnCodec codec"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos]
+
+triggers:
+  keywords: [audiocraft, musicgen, audiogen, encodec, text to music, text to audio, music generation, sound effects, melody conditioning]
+  intents: [generate_music, generate_sound_effects, text_to_music, audio_generation, melody_conditioned]
+  patterns:
+    - "(generate|create|make) .*(music|audio|sound|track) .*(text|description|prompt)"
+    - "(audiocraft|musicgen|audiogen|encodec)"
+    - "(text.?to.?music|text.?to.?audio|text.?to.?sound)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [pip, python3]
+
+provides:
+  capabilities: [text_to_music, text_to_sound, melody_generation, stereo_audio, audio_compression]
+  output_types: [.wav, .mp3]
+
+actions:
+
+  install:
+    description: Install AudioCraft
+    trigger_phrases: ["install audiocraft", "set up audiocraft", "install musicgen"]
+    rules:
+      - priority: HIGH
+        text: "pip install audiocraft (or pip install git+https://github.com/facebookresearch/audiocraft.git)"
+      - priority: HIGH
+        text: "Alternative: pip install transformers torch torchaudio for HuggingFace integration"
+      - priority: NORMAL
+        text: "GPU recommended but not required"
+    data:
+      - key: install_commands
+        list_value:
+          items:
+            - { string_value: "pip install audiocraft" }
+            - { string_value: "pip install git+https://github.com/facebookresearch/audiocraft.git" }
+            - { string_value: "pip install transformers torch torchaudio" }
+
+  generate_music:
+    description: Generate music from text descriptions with MusicGen
+    trigger_phrases: ["generate music", "create a track", "text to music", "make a beat", "compose music"]
+    rules:
+      - priority: CRITICAL
+        text: "Default sample rate is 32000 Hz for MusicGen"
+      - priority: HIGH
+        text: "Duration: 1-120 seconds (default 8). Longer = more VRAM"
+      - priority: HIGH
+        text: "cfg_coef controls text adherence: higher = stricter (default 3.0)"
+      - priority: HIGH
+        text: "Multiple descriptions can be batched for efficiency"
+      - priority: NORMAL
+        text: "Model sizes: small (300M, ~4GB VRAM), medium (1.5B, ~8GB), large (3.3B, ~16GB)"
+    data:
+      - key: model_variants
+        map_value:
+          entries:
+            musicgen-small: { string_value: "300M, quick generation, ~4GB VRAM" }
+            musicgen-medium: { string_value: "1.5B, balanced, ~8GB VRAM" }
+            musicgen-large: { string_value: "3.3B, best quality, ~16GB VRAM" }
+            musicgen-melody: { string_value: "1.5B, text + melody conditioning" }
+            musicgen-stereo: { string_value: "Stereo output variants" }
+            musicgen-style: { string_value: "1.5B, style transfer from reference" }
+      - key: generation_params
+        map_value:
+          entries:
+            duration: { string_value: "1-120 seconds (default 8)" }
+            top_k: { string_value: "250" }
+            temperature: { string_value: "1.0" }
+            cfg_coef: { string_value: "3.0 (text adherence)" }
+    examples:
+      - label: "basic text-to-music"
+        language: python
+        code: |
+          import torchaudio
+          from audiocraft.models import MusicGen
+          model = MusicGen.get_pretrained('facebook/musicgen-small')
+          model.set_generation_params(duration=8, top_k=250, temperature=1.0)
+          wav = model.generate(["happy upbeat electronic dance music with synths"])
+          torchaudio.save("output.wav", wav[0].cpu(), sample_rate=32000)
+      - label: "huggingface transformers"
+        language: python
+        code: |
+          from transformers import AutoProcessor, MusicgenForConditionalGeneration
+          processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+          model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
+          inputs = processor(text=["80s pop track with bassy drums"], padding=True, return_tensors="pt")
+          audio_values = model.generate(**inputs, max_new_tokens=256)
+
+  melody_conditioned:
+    description: Generate music conditioned on a melody input
+    trigger_phrases: ["melody conditioned", "generate with melody", "music from melody", "style transfer music"]
+    rules:
+      - priority: HIGH
+        text: "Use musicgen-melody or musicgen-melody-large model"
+      - priority: HIGH
+        text: "Load melody audio with torchaudio.load() and pass to generate_with_chroma()"
+      - priority: NORMAL
+        text: "For style transfer: use musicgen-style with set_style_conditioner_params()"
+    examples:
+      - label: "melody-conditioned generation"
+        language: python
+        code: |
+          from audiocraft.models import MusicGen
+          import torchaudio
+          model = MusicGen.get_pretrained('facebook/musicgen-melody')
+          model.set_generation_params(duration=30)
+          melody, sr = torchaudio.load("melody.wav")
+          wav = model.generate_with_chroma(["acoustic guitar folk song"], melody, sr)
+          torchaudio.save("output.wav", wav[0].cpu(), sample_rate=32000)
+
+  generate_sounds:
+    description: Generate sound effects with AudioGen
+    trigger_phrases: ["generate sound effects", "create ambient audio", "text to sound", "sound design"]
+    rules:
+      - priority: HIGH
+        text: "AudioGen sample rate is 16000 Hz (not 32000 like MusicGen)"
+      - priority: HIGH
+        text: "Use facebook/audiogen-medium model"
+      - priority: NORMAL
+        text: "Good for: thunderstorms, traffic, nature, mechanical sounds"
+    examples:
+      - label: "sound effect generation"
+        language: python
+        code: |
+          from audiocraft.models import AudioGen
+          import torchaudio
+          model = AudioGen.get_pretrained('facebook/audiogen-medium')
+          model.set_generation_params(duration=5)
+          wav = model.generate(["dog barking in a park with birds chirping"])
+          torchaudio.save("sound.wav", wav[0].cpu(), sample_rate=16000)
+
+  encodec_compression:
+    description: Compress and decompress audio with EnCodec
+    trigger_phrases: ["encodec compression", "audio codec", "compress audio", "audio to tokens"]
+    rules:
+      - priority: HIGH
+        text: "EnCodec: facebook/encodec_32khz for 32kHz audio"
+      - priority: NORMAL
+        text: "Encode to tokens, then decode back to audio waveform"
+    examples:
+      - label: "encodec encode/decode"
+        language: python
+        code: |
+          from audiocraft.models import CompressionModel
+          import torchaudio
+          model = CompressionModel.get_pretrained('facebook/encodec_32khz')
+          wav, sr = torchaudio.load("audio.wav")
+          encoded = model.encode(wav.unsqueeze(0))
+          codes = encoded[0]
+          decoded = model.decode(codes)
+          torchaudio.save("reconstructed.wav", decoded[0].cpu(), sample_rate=32000)
+
+guardrails:
+  - text: "MusicGen sample rate is 32000 Hz; AudioGen is 16000 Hz — don't mix up"
+    scope: ALWAYS
+  - text: "Don't use bf16 for AudioCodec if audio quality matters"
+    scope: WRITE_OPS
+  - text: "Clear CUDA cache between large batch generations"
+    scope: ALWAYS
+
+related:
+  - name: heartmula
+    relationship: alternative_to
+    description: "HeartMuLa for lyrics-conditioned song generation"

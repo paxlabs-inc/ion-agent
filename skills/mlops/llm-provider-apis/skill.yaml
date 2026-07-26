@@ -1,0 +1,117 @@
+skill:
+  name: llm-provider-apis
+  version: 1.0.0
+  summary: "Call configured LLM providers via HTTP (OpenAI-compatible endpoints) — credentials from .env"
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [llm api, provider api, openai compatible, direct http, api call, llm endpoint, base url, api key]
+  intents: [call_llm_api, smoke_test_provider, llm_http_request]
+  patterns:
+    - "(call|hit|query) .*(llm|api|provider|endpoint)"
+    - "(openai|compatible) .*(api|endpoint|http)"
+    - "(smoke.?test|test) .*(provider|api|llm)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: webfetch
+      required: false
+  binaries: [python3]
+
+provides:
+  capabilities: [llm_api_calls, provider_smoke_testing, structured_llm_decisions]
+  output_types: []
+
+actions:
+
+  read_credentials:
+    description: Read LLM provider credentials from the .env store
+    trigger_phrases: ["read api keys", "check providers", "list credentials", "get provider config"]
+    rules:
+      - priority: CRITICAL
+        text: "The read_file tool REFUSES /data/.ion/.env — use terminal (cat/Python) instead"
+      - priority: CRITICAL
+        text: "Never print full API keys into replies — confirm presence (key set: True) and masked prefixes only"
+      - priority: HIGH
+        text: "Credentials stored as *_API_KEY / *_BASE_URL pairs with _MODEL_<KEYNAME> mappings"
+    data:
+      - key: credential_location
+        string_value: "/data/.ion/.env"
+      - key: credential_format
+        string_value: "*_API_KEY, *_BASE_URL pairs with _MODEL_<KEYNAME> mappings"
+
+  smoke_test:
+    description: Test an LLM provider endpoint with a simple request
+    trigger_phrases: ["smoke test", "test api", "test provider", "check if api works"]
+    rules:
+      - priority: CRITICAL
+        text: "No SDK needed — use stdlib urllib.request for OpenAI-compatible endpoints"
+      - priority: HIGH
+        text: "Works for MiMo (Xiaomi), DashScope, Kimi, xAI, and any custom provider"
+      - priority: HIGH
+        text: "Use max_tokens >= 512 for smoke tests to avoid token starvation"
+    examples:
+      - label: "stdlib smoke test"
+        language: python
+        code: |
+          import json, urllib.request
+          req = urllib.request.Request(
+              f"{base}/chat/completions",
+              data=json.dumps({"model": model,
+                               "messages": [{"role": "user", "content": "Say OK"}],
+                               "max_tokens": 512}).encode(),
+              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+          )
+          with urllib.request.urlopen(req, timeout=60) as r:
+              body = json.loads(r.read())
+          content = body["choices"][0]["message"]["content"]
+
+  reasoning_models:
+    description: Handle reasoning models that share max_tokens with thinking
+    trigger_phrases: ["reasoning model", "empty content", "token starvation", "reasoning tokens"]
+    rules:
+      - priority: CRITICAL
+        text: "Reasoning models (e.g. MiMo mimo-v2.5-pro-ultraspeed) spend reasoning tokens OUT OF max_tokens budget"
+      - priority: CRITICAL
+        text: "A small max_tokens cap (10-50) yields HTTP 200 with EMPTY content — looks broken, is actually token starvation"
+      - priority: HIGH
+        text: "Use max_tokens >= 512 for smoke tests"
+      - priority: HIGH
+        text: "Check usage.completion_tokens_details.reasoning_tokens when output is suspiciously short"
+    data:
+      - key: reasoning_content_field
+        string_value: "reasoning_content (separate field for MiMo models)"
+      - key: usage_field
+        string_value: "usage.completion_tokens_details.reasoning_tokens"
+
+  structured_decisions:
+    description: Use LLM as a component in deterministic systems
+    trigger_phrases: ["structured output", "llm as component", "json from llm", "deterministic llm"]
+    rules:
+      - priority: CRITICAL
+        text: "Prompt for exactly one JSON object with available actions enumerated"
+      - priority: HIGH
+        text: "Parse defensively: strip markdown fences, extract first {...} span, fall back to safe default on garbage"
+      - priority: HIGH
+        text: "Inject transport behind an interface so tests use scripted fakes"
+    examples:
+      - label: "structured decision pattern"
+        language: text
+        code: |
+          Prompt: respond with {"kind": "done"|"act"|"decompose", ...}
+          Parse: strip fences, extract first {...}, default on garbage
+          Interface: thin marked layer hits live API, tests use scripted fake
+
+guardrails:
+  - text: "Never print full API keys — only masked prefixes"
+    scope: AUTH_OPS
+  - text: "Use terminal (not read_file) to access /data/.ion/.env"
+    scope: ALWAYS
+  - text: "Reasoning models need max_tokens >= 512 to avoid empty output"
+    scope: ALWAYS
+
+related: []

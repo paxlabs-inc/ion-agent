@@ -1,0 +1,148 @@
+skill:
+  name: huggingface-hub
+  version: 1.0.0
+  summary: "HuggingFace hf CLI: search/download/upload models, datasets, and Spaces"
+  author: Hugging Face
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [huggingface, hf, hugging face, hf cli, download model, upload model, hf hub, huggingface-cli]
+  intents: [download_model, upload_model, search_models, manage_repos, hf_auth]
+  patterns:
+    - "(download|upload|search|list) .*(model|dataset|space) .*(hugging ?face|hf)"
+    - "hf (download|upload|auth|repos|datasets|models)"
+    - "huggingface"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  optional_env: [HF_TOKEN]
+
+provides:
+  capabilities: [model_management, dataset_management, repo_management, hub_interaction]
+  output_types: []
+
+actions:
+
+  install:
+    description: Install the hf CLI
+    trigger_phrases: ["install hf cli", "set up huggingface cli", "install huggingface-cli"]
+    rules:
+      - priority: CRITICAL
+        text: "The hf command replaces the deprecated huggingface-cli command"
+      - priority: HIGH
+        text: "Install: curl -LsSf https://hf.co/cli/install.sh | bash -s"
+    data:
+      - key: install_command
+        string_value: "curl -LsSf https://hf.co/cli/install.sh | bash -s"
+
+  authentication:
+    description: Login and manage HuggingFace tokens
+    trigger_phrases: ["login to huggingface", "hf auth", "set huggingface token"]
+    rules:
+      - priority: CRITICAL
+        text: "Recommended: set HF_TOKEN env var or use --token flag"
+      - priority: HIGH
+        text: "Get tokens from huggingface.co/settings/tokens"
+      - priority: NORMAL
+        text: "Commands: hf auth login, logout, list, switch, whoami"
+    data:
+      - key: auth_commands
+        map_value:
+          entries:
+            login: { string_value: "hf auth login" }
+            logout: { string_value: "hf auth logout" }
+            whoami: { string_value: "hf auth whoami" }
+            list: { string_value: "hf auth list" }
+
+  download:
+    description: Download models, datasets, or files from HuggingFace Hub
+    trigger_phrases: ["download model", "download dataset", "get model from huggingface", "hf download"]
+    rules:
+      - priority: HIGH
+        text: "Use hf download REPO_ID for models and datasets"
+      - priority: HIGH
+        text: "Use --format json for machine-readable output"
+      - priority: NORMAL
+        text: "Use -q/--quiet for IDs-only output"
+    examples:
+      - label: "download a model"
+        language: bash
+        code: "hf download meta-llama/Llama-2-7b-hf"
+      - label: "download a dataset"
+        language: bash
+        code: "hf download squad"
+
+  upload:
+    description: Upload files or folders to HuggingFace Hub
+    trigger_phrases: ["upload model", "push to huggingface", "upload dataset", "hf upload"]
+    rules:
+      - priority: HIGH
+        text: "hf upload REPO_ID for single-commit uploads"
+      - priority: HIGH
+        text: "hf upload-large-folder REPO_ID LOCAL_PATH for resumable large directory uploads"
+      - priority: NORMAL
+        text: "Use hf sync for syncing local directory with bucket"
+    data:
+      - key: upload_commands
+        map_value:
+          entries:
+            upload: { string_value: "hf upload REPO_ID" }
+            upload_large: { string_value: "hf upload-large-folder REPO_ID LOCAL_PATH" }
+            sync: { string_value: "hf sync" }
+
+  repo_management:
+    description: Create, delete, and manage HuggingFace repositories
+    trigger_phrases: ["create repo", "manage repos", "hf repos", "duplicate repo"]
+    rules:
+      - priority: HIGH
+        text: "Commands: hf repos create, delete, duplicate, move, branch, tag, delete-files"
+      - priority: NORMAL
+        text: "Use hf repos duplicate to clone a model/dataset/Space to a new ID"
+    data:
+      - key: repo_commands
+        map_value:
+          entries:
+            create: { string_value: "hf repos create" }
+            delete: { string_value: "hf repos delete" }
+            duplicate: { string_value: "hf repos duplicate" }
+            move: { string_value: "hf repos move" }
+
+  specialized_commands:
+    description: Datasets, models, discussions, compute, and infrastructure
+    trigger_phrases: ["hf datasets", "hf models", "hf discussions", "hf endpoints", "hf jobs"]
+    rules:
+      - priority: HIGH
+        text: "Datasets: hf datasets list, info, parquet, sql SQL (DuckDB queries)"
+      - priority: HIGH
+        text: "Discussions: list, create, comment, close, reopen, merge PRs"
+      - priority: HIGH
+        text: "Endpoints: deploy, pause, resume, scale-to-zero for inference"
+      - priority: NORMAL
+        text: "Jobs: hf jobs uv for running Python with inline deps on HF infra"
+      - priority: NORMAL
+        text: "Cache: hf cache list, prune (remove detached revisions), verify"
+    data:
+      - key: command_categories
+        map_value:
+          entries:
+            datasets: { string_value: "list, info, parquet, sql" }
+            models: { string_value: "list, info" }
+            papers: { string_value: "list daily papers" }
+            discussions: { string_value: "list, create, comment, close, merge" }
+            endpoints: { string_value: "deploy, pause, resume, scale-to-zero" }
+            jobs: { string_value: "uv, stats" }
+            cache: { string_value: "list, prune, verify" }
+            webhooks: { string_value: "create, watch, enable/disable" }
+
+guardrails:
+  - text: "The hf command replaces huggingface-cli — always use hf"
+    scope: ALWAYS
+  - text: "Use --format json for machine-readable output in scripts"
+    scope: ALWAYS
+  - text: "Authentication: prefer HF_TOKEN env var over interactive login"
+    scope: AUTH_OPS
+
+related: []

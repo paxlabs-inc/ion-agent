@@ -1,0 +1,171 @@
+skill:
+  name: llama-cpp
+  version: 2.1.2
+  summary: "llama.cpp local GGUF inference + HuggingFace Hub model discovery"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [llama.cpp, gguf, quantization, local inference, cpu inference, llama-server, llama-cli, llama-cpp-python, gguf model]
+  intents: [run_local_model, find_gguf, quantize_model, local_inference, llama_server]
+  patterns:
+    - "(run|serve|load) .*(gguf|llama|local model)"
+    - 'llama\.(cpp|server|cli)'
+    - "(q4|q5|q6|q8|iq4|iq3) .*(quant|gguf)"
+    - "(cpu|local|edge) .*(inference|llm)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: webfetch
+      required: false
+  binaries: [curl]
+
+provides:
+  capabilities: [local_llm_inference, gguf_model_discovery, openai_compatible_server, quantization_guidance]
+  output_types: []
+
+actions:
+
+  install:
+    description: Install llama.cpp
+    trigger_phrases: ["install llama.cpp", "set up llama.cpp", "build llama.cpp"]
+    rules:
+      - priority: HIGH
+        text: "macOS/Linux: brew install llama.cpp"
+      - priority: HIGH
+        text: "Windows: winget install llama.cpp"
+      - priority: NORMAL
+        text: "From source: git clone, cmake -B build, cmake --build build --config Release"
+    data:
+      - key: install_methods
+        map_value:
+          entries:
+            brew: { string_value: "brew install llama.cpp" }
+            winget: { string_value: "winget install llama.cpp" }
+            source: { string_value: "git clone https://github.com/ggml-org/llama.cpp && cmake -B build && cmake --build build --config Release" }
+
+  model_discovery:
+    description: Find GGUF models on HuggingFace Hub
+    trigger_phrases: ["find gguf model", "search llama.cpp models", "what gguf files exist", "discover models"]
+    rules:
+      - priority: CRITICAL
+        text: "Prefer URL workflows: use HuggingFace local-app view before asking for CLI/scripts"
+      - priority: CRITICAL
+        text: "Open repo with ?local-app=llama.cpp view — copy exact command from HF snippet"
+      - priority: HIGH
+        text: "Use tree API to confirm what GGUF files exist: /api/models/<repo>/tree/main?recursive=true"
+      - priority: HIGH
+        text: "Keep repo-specific labels like UD-Q4_K_M or IQ4_NL_XL — don't normalize"
+      - priority: HIGH
+        text: "Separate main model files from mmproj-*.gguf projector files and BF16 shards"
+      - priority: NORMAL
+        text: "Only suggest conversion from Transformers weights if repo lacks GGUF files"
+    data:
+      - key: search_urls
+        list_value:
+          items:
+            - { string_value: "https://huggingface.co/models?apps=llama.cpp&sort=trending" }
+            - { string_value: "https://huggingface.co/models?search=<term>&apps=llama.cpp&sort=trending" }
+            - { string_value: "https://huggingface.co/<repo>?local-app=llama.cpp" }
+            - { string_value: "https://huggingface.co/api/models/<repo>/tree/main?recursive=true" }
+      - key: output_format
+        string_value: "Repo, Recommended quant, llama-server command, other GGUFs, source URLs"
+
+  run_model:
+    description: Run a GGUF model locally with llama-server or llama-cli
+    trigger_phrases: ["run gguf model", "start llama server", "serve a model", "run local llm"]
+    rules:
+      - priority: CRITICAL
+        text: "Shorthand quant selection: llama-server -hf <repo>:<QUANT>"
+      - priority: CRITICAL
+        text: "Exact file fallback: llama-server --hf-repo <repo> --hf-file <filename.gguf>"
+      - priority: HIGH
+        text: "llama-server provides OpenAI-compatible API on localhost:8080"
+      - priority: NORMAL
+        text: "llama-cli for one-shot generation, llama-server for persistent API"
+    examples:
+      - label: "run from hub with quant shorthand"
+        language: bash
+        code: "llama-server -hf bartowski/Llama-3.2-3B-Instruct-GGUF:Q8_0"
+      - label: "run exact file from hub"
+        language: bash
+        code: |
+          llama-server \
+            --hf-repo microsoft/Phi-3-mini-4k-instruct-gguf \
+            --hf-file Phi-3-mini-4k-instruct-q4.gguf \
+            -c 4096
+      - label: "openai-compatible check"
+        language: bash
+        code: |
+          curl http://localhost:8080/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+
+  python_bindings:
+    description: Use llama-cpp-python for programmatic inference
+    trigger_phrases: ["llama-cpp-python", "python llama inference", "python gguf"]
+    rules:
+      - priority: HIGH
+        text: "pip install llama-cpp-python (CUDA: CMAKE_ARGS='-DGGML_CUDA=on' pip install ...)"
+      - priority: HIGH
+        text: "Load from hub: Llama.from_pretrained(repo_id=..., filename='*Q4_K.gguf')"
+      - priority: NORMAL
+        text: "n_gpu_layers: 0 for CPU, 99 to offload everything to GPU"
+    examples:
+      - label: "basic python generation"
+        language: python
+        code: |
+          from llama_cpp import Llama
+          llm = Llama(model_path="./model-q4_k_m.gguf", n_ctx=4096, n_gpu_layers=35)
+          out = llm("What is ML?", max_tokens=256, temperature=0.7)
+          print(out["choices"][0]["text"])
+      - label: "load from hub"
+        language: python
+        code: |
+          from llama_cpp import Llama
+          llm = Llama.from_pretrained(
+              repo_id="bartowski/Llama-3.2-3B-Instruct-GGUF",
+              filename="*Q4_K_M.gguf",
+              n_gpu_layers=35,
+          )
+
+  quantization_guidance:
+    description: Help choose the right quantization for hardware
+    trigger_phrases: ["which quant", "choose quantization", "q4 vs q5", "best quant for my ram"]
+    rules:
+      - priority: CRITICAL
+        text: "Prefer the exact quant HF marks as compatible for user's hardware"
+      - priority: HIGH
+        text: "General chat: start with Q4_K_M"
+      - priority: HIGH
+        text: "Code/technical: prefer Q5_K_M or Q6_K if memory allows"
+      - priority: HIGH
+        text: "Tight RAM: Q3_K_M or IQ variants only if user explicitly prioritizes fit over quality"
+      - priority: NORMAL
+        text: "For multimodal repos, mention mmproj-*.gguf separately — it's not the main model"
+    data:
+      - key: quant_heuristics
+        map_value:
+          entries:
+            general_chat: { string_value: "Q4_K_M" }
+            code_technical: { string_value: "Q5_K_M or Q6_K" }
+            tight_ram: { string_value: "Q3_K_M or IQ variants" }
+
+guardrails:
+  - text: "Prefer HF local-app view and tree API over guessing filenames"
+    scope: ALWAYS
+  - text: "Don't normalize repo-native quant labels — report exactly as HF shows"
+    scope: ALWAYS
+  - text: "Separate main model files from mmproj projector files and BF16 shards"
+    scope: ALWAYS
+
+related:
+  - name: huggingface-hub
+    relationship: composes_with
+    description: "Use hf CLI for Hub interactions"
+  - name: serving-llms-vllm
+    relationship: alternative_to
+    description: "vLLM for high-throughput GPU serving"

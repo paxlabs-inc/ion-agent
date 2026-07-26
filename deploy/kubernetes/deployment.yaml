@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ion
+  namespace: ion
+  labels:
+    app.kubernetes.io/name: ion
+    app.kubernetes.io/component: runtime
+spec:
+  # Ion is a single persistent identity backed by a ReadWriteOnce volume.
+  # Run exactly one replica and replace it in place.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ion
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ion
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # Ion runtime: serves the operator on the Pod's loopback.
+        - name: ion
+          image: ghcr.io/paxlabs-inc/ion-agent:latest
+          imagePullPolicy: IfNotPresent
+          args: ["dashboard"]
+          envFrom:
+            - configMapRef:
+                name: ion-config
+          env:
+            - name: ION_AUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ion-operator-auth
+                  key: username
+            - name: ION_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ion-operator-auth
+                  key: password
+                  optional: true
+            - name: ION_AUTH_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: ion-operator-auth
+                  key: passwordHash
+                  optional: true
+            - name: ION_OFFICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ion-office-secrets
+                  key: jwt-secret
+          ports:
+            - name: loopback
+              containerPort: 4174
+              # Bound to 127.0.0.1; not reachable outside the Pod. Declared for
+              # documentation only.
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            tcpSocket:
+              host: 127.0.0.1
+              port: 4174
+            initialDelaySeconds: 10
+            periodSeconds: 15
+        # Reverse proxy sidecar: shares the Pod network namespace, exposes 8080.
+        - name: proxy
+          image: caddy:2.8-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: proxy-config
+              mountPath: /etc/caddy
+              readOnly: true
+            - name: caddy-data
+              mountPath: /data
+            - name: caddy-config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ion-data
+        - name: proxy-config
+          configMap:
+            name: ion-proxy
+        - name: caddy-data
+          emptyDir: {}
+        - name: caddy-config
+          emptyDir: {}

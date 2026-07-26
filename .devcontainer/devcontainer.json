@@ -1,0 +1,58 @@
+{
+  "name": "Ion",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26.5"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22.22.0"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.78.0",
+      "profile": "default"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "ION_DATA_DIR": "/workspaces/ion-agent/.ion",
+    "ION_WEB_LISTEN": "127.0.0.1:4174",
+    "PLAYWRIGHT_BROWSERS_PATH": "/home/vscode/.cache/ms-playwright"
+  },
+  "forwardPorts": [4174],
+  "portsAttributes": {
+    "4174": {
+      "label": "Ion web operator",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "rust-lang.rust-analyzer",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "editorconfig.editorconfig",
+        "tamasfe.even-better-toml",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--fast"],
+        "editor.formatOnSave": true,
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
+        "files.eol": "\n"
+      }
+    }
+  }
+}

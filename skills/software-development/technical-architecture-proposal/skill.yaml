@@ -1,0 +1,97 @@
+skill:
+  name: technical-architecture-proposal
+  version: 1.0.0
+  summary: Produce architecture proposals for adding capabilities to existing codebases — systematic exploration, seam-finding, grounded recommendations.
+  author: Neo
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [architecture proposal, design doc, integration plan, add capability, extend codebase]
+  intents: [create_architecture_proposal, design_integration, plan_extension]
+  patterns:
+    - "(architecture|design) .*(proposal|doc|plan)"
+    - "(how|plan) .*(add|extend|integrate) .*(to|into) .*(system|codebase|project)"
+    - "technical plan .*(feature|capability)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [architecture_proposal, integration_planning]
+  output_types: [.md]
+
+actions:
+
+  create_proposal:
+    description: Produce a grounded architecture proposal for a new capability
+    trigger_phrases: ["architecture proposal", "design doc", "how would we add X", "technical plan"]
+    rules:
+      - priority: CRITICAL
+        text: "Every recommendation must reference a real interface, file, or pattern discovered in the codebase — no generic hand-waving"
+      - priority: CRITICAL
+        text: "Explore the codebase BEFORE writing anything — map directory, read build manifest, find core interfaces, trace request flow, find seams"
+      - priority: HIGH
+        text: "Reference real files and interfaces — 'The Reporter interface in internal/agent/reporter.go defines Say()' is good; 'The agent has an output interface' is bad"
+      - priority: HIGH
+        text: "Include concrete code — Go interfaces, type definitions, function signatures, short implementation sketches"
+      - priority: HIGH
+        text: "Use comparison tables for provider/service choices — columns: name, key metric, SDK availability, recommendation"
+      - priority: HIGH
+        text: "Phase 1 should be simplest useful slice — don't over-architect early phases"
+      - priority: NORMAL
+        text: "No marketing language — banned: best-in-class, cutting-edge, revolutionary. Say: lowest latency, cheapest, best quality with data"
+      - priority: NORMAL
+        text: "No em dashes — use commas, semicolons, or restructure the sentence"
+    data:
+      - key: proposal_structure
+        list_value:
+          items:
+            - { string_value: "1. Overview — goal, use cases, current state with file references" }
+            - { string_value: "2. Primary Component — provider options, recommendation, interface definition, implementation sketch" }
+            - { string_value: "3. Secondary Component — same structure" }
+            - { string_value: "4. Integration — file/component integration points, new packages, API endpoints, data flow diagram" }
+            - { string_value: "5. Technical Stack — dependencies, config schema, error handling" }
+            - { string_value: "6. Implementation Roadmap — phased delivery, each phase independently deployable" }
+            - { string_value: "7. Security & Privacy — data handling, consent" }
+            - { string_value: "8. Cost Analysis — per-provider cost tables, monthly estimates" }
+      - key: exploration_steps
+        list_value:
+          items:
+            - { string_value: "Map directory structure" }
+            - { string_value: "Read build manifest (go.mod, package.json, etc.)" }
+            - { string_value: "Find 3-5 load-bearing interfaces/types" }
+            - { string_value: "Trace request/response flow" }
+            - { string_value: "Find seams (plugin interfaces, events, middleware, config injection)" }
+            - { string_value: "Search for existing related code" }
+    examples:
+      - label: "good vs bad references"
+        language: text
+        code: |
+          GOOD: "The Reporter interface in internal/agent/reporter.go defines Say(), Status(), Delta()"
+          BAD: "The agent has an output interface"
+          GOOD: "Config via internal/config/config.go: type Config struct { ... }"
+          BAD: "Add a configuration option"
+
+  review_proposal:
+    description: Review or refine an existing architecture proposal
+    trigger_phrases: ["review architecture proposal", "improve design doc", "critique proposal"]
+    rules:
+      - priority: HIGH
+        text: "Verify every claim references a real file or interface — flag generic statements"
+      - priority: HIGH
+        text: "Check that Phase 1 is the simplest useful slice — no over-architecting"
+      - priority: NORMAL
+        text: "Ensure error handling and fallback chains are documented"
+
+guardrails:
+  - text: "Never propose without reading the code first — explore before writing"
+    scope: ALWAYS
+  - text: "Every recommendation must reference real code — no generic hand-waving"
+    scope: ALWAYS
+
+related: []

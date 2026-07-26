@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/paxlabs-inc/ion-agent/discussions
+    about: Ask questions, share ideas, and discuss Ion with the community.
+  - name: Security vulnerability
+    url: https://github.com/paxlabs-inc/ion-agent/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.
+  - name: Documentation
+    url: https://github.com/paxlabs-inc/ion-agent/tree/master/docs
+    about: Read the Ion documentation before filing an issue.

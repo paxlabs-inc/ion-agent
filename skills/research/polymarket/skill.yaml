@@ -1,0 +1,103 @@
+skill:
+  name: polymarket
+  version: 1.0.0
+  summary: "Query Polymarket prediction markets: prices, orderbooks, history"
+  author: "Ion Agent + Teknium"
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [polymarket, prediction market, betting odds, event probability, market prices]
+  intents: [query_polymarket, get_market_prices, search_markets, get_price_history]
+  patterns:
+    - "(what are the odds|probability|likelihood) .*(of|that|for)"
+    - "(polymarket|prediction market) .*(price|odds|market)"
+    - "(search|find|browse) .*(polymarket|prediction)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [curl, python3]
+
+provides:
+  capabilities: [polymarket_search, market_prices, orderbook_data, price_history]
+  output_types: []
+
+actions:
+
+  search_markets:
+    description: Search Polymarket for markets matching a query
+    trigger_phrases: ["search polymarket", "find prediction markets", "polymarket search"]
+    rules:
+      - priority: CRITICAL
+        text: "All endpoints are read-only and require zero authentication"
+      - priority: HIGH
+        text: "Use Gamma API public-search endpoint with user's query"
+      - priority: HIGH
+        text: "Parse response: extract events and their nested markets"
+      - priority: NORMAL
+        text: "Present: market question, current prices as percentages, volume"
+    data:
+      - key: gamma_api_base
+        string_value: "https://gamma-api.polymarket.com"
+      - key: clob_api_base
+        string_value: "https://clob.polymarket.com"
+      - key: data_api_base
+        string_value: "https://data-api.polymarket.com"
+
+  get_market_prices:
+    description: Get current prices and market details
+    trigger_phrases: ["polymarket prices", "market prices", "current odds"]
+    rules:
+      - priority: CRITICAL
+        text: "outcomePrices field is JSON-encoded array like [\"0.80\", \"0.20\"] — prices ARE probabilities (0.65 = 65%)"
+      - priority: HIGH
+        text: "Format prices as percentages for readability: outcomePrices [\"0.652\", \"0.348\"] → 'Yes: 65.2%, No: 34.8%'"
+      - priority: HIGH
+        text: "Always show market question and probability, include volume when available"
+      - priority: NORMAL
+        text: "clobTokenIds: JSON-encoded array of two token IDs [Yes, No] for price/book queries"
+      - priority: NORMAL
+        text: "conditionId: hex string used for price history queries"
+    examples:
+      - label: "present market result"
+        language: text
+        code: |
+          "Will X happen?" — 65.2% Yes ($1.2M volume)
+
+  get_price_history:
+    description: Get historical price data for a market
+    trigger_phrases: ["price history", "historical odds", "market history"]
+    rules:
+      - priority: HIGH
+        text: "Use conditionId from market data for price history queries via CLOB API"
+      - priority: NORMAL
+        text: "Some new markets may have empty price history"
+
+  parse_double_encoded_fields:
+    description: Handle double-encoded JSON fields in Gamma API responses
+    trigger_phrases: ["parse polymarket response", "decode polymarket data"]
+    rules:
+      - priority: HIGH
+        text: "Gamma API returns outcomePrices, outcomes, clobTokenIds as JSON strings inside JSON (double-encoded)"
+      - priority: HIGH
+        text: "Parse with json.loads(market['outcomePrices']) to get actual array"
+    examples:
+      - label: "python parsing"
+        language: python
+        code: |
+          import json
+          prices = json.loads(market['outcomePrices'])
+          # prices is now ["0.652", "0.348"]
+          yes_pct = float(prices[0]) * 100
+
+guardrails:
+  - text: "This skill is read-only — it does not support placing trades"
+    scope: ALWAYS
+  - text: "Trading requires wallet-based crypto authentication (EIP-712 signatures)"
+    scope: ALWAYS
+  - text: "Geographic restrictions apply to trading but read-only data is globally accessible"
+    scope: ALWAYS
+
+related: []

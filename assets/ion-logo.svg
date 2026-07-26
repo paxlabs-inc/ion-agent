@@ -1,0 +1,9 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ion">
+  <rect width="96" height="96" rx="20" fill="#0B1220"/>
+  <g stroke="#3DD4C7" stroke-width="3" fill="none">
+    <ellipse cx="48" cy="48" rx="34" ry="13" transform="rotate(30 48 48)"/>
+    <ellipse cx="48" cy="48" rx="34" ry="13" transform="rotate(-30 48 48)"/>
+  </g>
+  <rect x="44" y="30" width="8" height="36" rx="4" fill="#F4F7FB"/>
+  <circle cx="48" cy="48" r="6" fill="#3DD4C7"/>
+</svg>

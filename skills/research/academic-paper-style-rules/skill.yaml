@@ -1,0 +1,151 @@
+skill:
+  name: academic-paper-style-rules
+  version: 1.0.0
+  summary: "Write academic papers (.txt, .md) with enforced style constraints: banned words, voice rules, reference verification, IEEE structure."
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [academic paper, style rules, banned words, plain text paper, IEEE paper, style constraints]
+  intents: [write_academic_paper, enforce_style_rules, verify_references, check_compliance]
+  patterns:
+    - "(write|draft|compose) .*(paper|academic|research).*style"
+    - "(banned|prohibited) words.*(paper|writing)"
+    - "plain.?text (paper|academic)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+    - name: web_extract
+      required: false
+  binaries: [grep, wc]
+
+provides:
+  capabilities: [academic_paper_writing, style_enforcement, reference_verification, compliance_checking]
+  output_types: [.txt, .md]
+
+actions:
+
+  enforce_style_rules:
+    description: Extract and enforce style constraints from user request
+    trigger_phrases: ["apply style rules", "enforce banned words", "check style compliance"]
+    rules:
+      - priority: CRITICAL
+        text: "Build explicit checklist from user-supplied rules: voice, banned words, banned punctuation, structure, citation format"
+      - priority: CRITICAL
+        text: "Banned words must be checked across ALL text including section headings — headings often hide AI tells"
+      - priority: CRITICAL
+        text: "Check for em dashes (Unicode — and ASCII --) if banned punctuation specified"
+      - priority: HIGH
+        text: "Common AI tells to flag: delve, landscape, tapestry, crucial, furthermore, moreover, in conclusion, aforementioned, notably, particularly"
+      - priority: HIGH
+        text: "When 'we' voice required: use 'we' for all actions, avoid passive voice, avoid 'the author(s)' and 'this paper'"
+      - priority: NORMAL
+        text: "Provide replacement suggestions for each banned word"
+    data:
+      - key: common_banned_words
+        list_value:
+          items:
+            - { string_value: delve }
+            - { string_value: landscape }
+            - { string_value: tapestry }
+            - { string_value: crucial }
+            - { string_value: furthermore }
+            - { string_value: moreover }
+            - { string_value: "in conclusion" }
+            - { string_value: "it is important to note" }
+            - { string_value: "in the realm of" }
+            - { string_value: aforementioned }
+            - { string_value: notably }
+            - { string_value: particularly }
+      - key: check_command
+        string_value: "grep -in 'word1\\|word2\\|word3' paper.txt"
+    examples:
+      - label: "grep for banned words in full file"
+        language: bash
+        code: |
+          grep -in 'delve\\|landscape\\|tapestry\\|crucial' paper.txt
+          grep -c '—' paper.txt  # em dash count, should be 0
+
+  verify_references:
+    description: Batch-verify arXiv IDs, author lists, and publication years
+    trigger_phrases: ["verify references", "check citations", "validate arxiv ids"]
+    rules:
+      - priority: CRITICAL
+        text: "Never trust arXiv IDs from memory — always fetch the page and verify title matches ID"
+      - priority: CRITICAL
+        text: "Batch-verify in groups of 5 URLs max per web_extract call"
+      - priority: HIGH
+        text: "Check: title matches arXiv ID, author list is correct, year matches submission history"
+      - priority: HIGH
+        text: "When arXiv page doesn't render authors: search '\"paper title\" arxiv authors', check Semantic Scholar API, or try HTML version"
+      - priority: NORMAL
+        text: "Common error: paper title correct but arXiv ID wrong — always cross-check"
+    data:
+      - key: arxiv_url_pattern
+        string_value: "https://arxiv.org/abs/{id}"
+      - key: semantic_scholar_pattern
+        string_value: "https://api.semanticscholar.org/graph/v1/paper/arXiv:{id}"
+      - key: html_fallback_pattern
+        string_value: "https://arxiv.org/html/{id}v{version}"
+
+  structure_paper:
+    description: Outline and draft paper following IEEE-style template
+    trigger_phrases: ["outline paper", "structure paper", "IEEE format", "draft paper structure"]
+    rules:
+      - priority: HIGH
+        text: "Standard IEEE sections: Title, Author, Abstract, Index Terms, Introduction, Background/Related Work, Main Sections, Limitations, Conclusion, References"
+      - priority: HIGH
+        text: "Abstract: single paragraph, 150-250 words, states problem/approach/results"
+      - priority: HIGH
+        text: "Confirm word count target with user: Short (3-4K), Standard (4-6K), Long (6-8K)"
+      - priority: NORMAL
+        text: "Introduction: problem, motivation, contributions as bullet list, paper organization"
+    data:
+      - key: word_count_targets
+        map_value:
+          entries:
+            short: { string_value: "3000-4000" }
+            standard: { string_value: "4000-6000" }
+            long: { string_value: "6000-8000" }
+
+  pre_delivery_check:
+    description: Run all compliance checks before delivering the paper
+    trigger_phrases: ["run compliance check", "pre-delivery check", "validate paper"]
+    rules:
+      - priority: CRITICAL
+        text: "Run ALL checks: word count, em dashes, banned words (entire file incl headings), reference count, section headers, voice consistency"
+      - priority: HIGH
+        text: "Deliver verification summary with results: word count, em dash count, AI tells found, references verified, sections present, voice check"
+      - priority: NORMAL
+        text: "Use grep -in for case-insensitive banned word search across whole file"
+    examples:
+      - label: "full compliance scan"
+        language: bash
+        code: |
+          wc -w paper.txt
+          grep -c '—' paper.txt
+          grep -in 'delve\|landscape\|tapestry\|crucial' paper.txt
+          grep -c '^\[' paper.txt
+          grep -E '^(I\.|II\.|III\.)' paper.txt
+          grep -c ' we ' paper.txt
+
+guardrails:
+  - text: "Always grep the entire file for banned words — headings contain AI tells too"
+    scope: ALWAYS
+  - text: "Never trust citation data from memory — always fetch and verify programmatically"
+    scope: ALWAYS
+  - text: "Use plain text formats (.txt, .md) unless user requests LaTeX"
+    scope: ALWAYS
+
+related:
+  - name: research-paper-writing
+    relationship: alternative_to
+    description: "LaTeX papers for ML conferences with programmatic citations"
+  - name: arxiv
+    relationship: composes_with
+    description: "Search arXiv for papers to cite"

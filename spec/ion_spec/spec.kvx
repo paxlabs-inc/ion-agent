@@ -1,0 +1,1702 @@
+# spec.kvx — ION: the agent that is alive
+# SINGLE SOURCE for requirements + design + tasks. Rendered to
+# requirements.md / design.md / tasks.md by spec/specgen. Do not edit the
+# generated markdown; edit this file and regenerate.
+#
+# Format: Ion .kvx (see tachyon/internal/config/kvx.go). One key = value per
+# line; string values double-quoted; lists are ["a","b"]; # starts a comment.
+# Schema:
+#   [req.<n>]   title, story, ac_1..ac_n          (acceptance criteria, EARS)
+#   [design]    overview, include="design.body.md" (rich prose/diagrams inlined)
+#   [task.<id>] title, status, wave, reqs, requires (dotted ids: 1, 1.1, 1.2)
+
+[meta]
+feature      = "ion-core"
+title        = "ION — epistemic core, living memory, honest execution, orchestrated multiplicity, emergent liveness"
+status       = "planning"
+spec_version = "1.0.0"
+intro        = "Ion is a full-range super-agent architecture that integrates epistemic depth, durable memory, reusable skills, multi-channel presence, and controlled extensions. Ion is not a software-engineering agent or coding product: he is one persistent general agent who can develop demonstrated professional expertise across fields. Software engineering is a first-class expert capability with an embedded professional and beginner-accessible development environment, not Ion's identity, outer product category, or a separate assistant. He adds ten capabilities missing from conventional agent loops: genuine curiosity, emotional state modeling, social awareness, strategic forgetting, dreams (Dreamweaver), temporal embodiment, metacognitive confidence monitoring, repair-after-failure identity, goal generation, and aesthetic judgment. The architecture is seven layers (Foundation, Perception, Belief, Intent, Action, Reflection, Presence) built on seven pillars (Epistemic Core, Living Memory, Honest Execution, Orchestrated Multiplicity, Extensible Ecosystem, Continuous Presence, Emergent Liveness). All code is Go 1.22+ primary, Rust for HNSW vector search, TypeScript for the safety dashboard. Security is not a feature — it is the foundation: 30 Day Zero requirements, 23 Day 100 requirements, 5 binding security architecture decisions (SADR-001 through SADR-005), and a dedicated Phase 2.5 security integration gate before any persistent memory is built."
+
+[design]
+overview = "See ENGINEERING_STANDARDS.md for the complete specification. The architecture is seven strict layers with unidirectional dependencies. Ion remains one general identity, memory, relationship, policy, and execution continuity across every field; specialized professional environments such as the Software Studio are contextual projections of that same agent and runtime, never separate agents or replacements for the general experience. Every component is an attack surface. Every data flow is a potential exfiltration path. Security is designed before the first line of code. Tests are proof, not ritual — stubs and fakes are prohibited except at true external boundaries. The agent must be alive, not performing — emotional state modulates decision-making, not output cosmetics."
+
+# ============================== REQUIREMENTS ==============================
+
+# --- FOUNDATION LAYER ---
+
+[req.1]
+title = "Session store: SQLite + FTS5 with WAL mode and per-row encryption"
+story = "As the agent core, I want a persistent, searchable, encrypted session store, so that all conversation history survives restarts and is searchable without exposing plaintext."
+ac_1  = "THE session store SHALL use SQLite in WAL mode with the pragmas specified in ENGINEERING_STANDARDS.md §5.1 (journal_mode=WAL, wal_autocheckpoint=1000, busy_timeout=5000, synchronous=NORMAL, cache_size=-8000, mmap_size=268435456, foreign_keys=ON)."
+ac_2  = "EVERY messages.content field SHALL be encrypted with a per-row DEK (AES-256-GCM envelope encryption). The DEK is stored alongside the ciphertext, encrypted by the User Key."
+ac_3  = "FTS5 virtual table SHALL index only non-sensitive metadata (timestamps, memory types, memory IDs). Content is fetched from encrypted storage and decrypted in application memory."
+ac_4  = "COMPRESSION-TRIGGERED session splitting SHALL create child sessions linked via parent_id when context approaches 75% of model context length."
+ac_5  = "A test SHALL prove: (a) round-trip encrypt/decrypt of messages, (b) FTS5 search returns correct results without decrypting the index, (c) session splitting creates correct parent-child links, (d) concurrent reads do not block the single writer."
+
+[req.2]
+title = "Vault encryption: AES-256-GCM envelope with KEK → User Key → DEK hierarchy"
+story = "As the security layer, I want all persistent data encrypted at rest with a hierarchical key system, so that compromise of a single key does not compromise the entire store."
+ac_1  = "THE vault SHALL use AES-256-GCM envelope encryption with the hierarchy: KEK (from OS keychain) → User Key (per-user) → DEK (per-object)."
+ac_2  = "EACH encrypted object SHALL be a self-contained envelope: [16-byte nonce] [encrypted DEK] [12-byte IV] [ciphertext] [16-byte tag]."
+ac_3  = "THE User Key SHALL be zeroed on shutdown via memguard or manual zero. DEKs SHALL be zeroed after use. Key material SHALL NEVER be logged."
+ac_4  = "Decryption failures SHALL return ErrDecryptionFailed — NEVER padding oracle information."
+ac_5  = "A test SHALL prove: (a) encrypt/decrypt round-trip, (b) wrong key returns ErrDecryptionFailed, (c) key rotation is atomic, (d) key zeroization on shutdown."
+
+[req.3]
+title = "O1 provider abstraction: normalized interface across all LLM providers"
+story = "As the agent core, I want a single interface for all LLM providers, so that adding a new provider requires writing one adapter and touching nothing above."
+ac_1  = "THE O1 protocol SHALL normalize all provider interactions into NormalizedGeneration and NormalizedToolCall types."
+ac_2  = "EACH provider adapter SHALL implement ProviderAdapter: TranslateRequest, TranslateResponse, TranslateStreamEvent."
+ac_3  = "THE provider pool SHALL support automatic credential rotation on 429, fallback chains on provider failure, and per-key usage tracking."
+ac_4  = "A test SHALL prove: (a) OpenAI adapter produces correct NormalizedGeneration, (b) Anthropic adapter produces correct NormalizedGeneration, (c) credential rotation on 429, (d) fallback chain on provider failure."
+
+[req.4]
+title = "Self-registering tool registry with readiness probes"
+story = "As the extension system, I want tools that declare themselves at module level, so that adding a tool means adding a file — no central registration."
+ac_1  = "TOOLS SHALL register via registry.register() at module level. Discovery scans for files containing this call."
+ac_2  = "EACH tool registration includes a check_fn readiness probe with a 30-second TTL cache and 60-second failure grace period."
+ac_3  = "IF check_fn fails, the tool silently vanishes from the tool surface. The model never sees tools it can't use."
+ac_4  = "A test SHALL prove: (a) tool registration and discovery, (b) readiness probe failure removes tool from surface, (c) readiness probe recovery restores tool."
+
+[req.5]
+title = "Five-layer policy pipeline with GREEN/YELLOW/RED enforcement"
+story = "As the security layer, I want every tool call evaluated against five defense-in-depth layers, so that no single misconfiguration results in unauthorized execution."
+ac_1  = "EVERY tool call SHALL pass through five layers in order: Sandbox → Profile → Provider → Sender → Group."
+ac_2  = "EACH layer can ALLOW, DENY, or MODIFY. First DENY wins — subsequent layers are not evaluated."
+ac_3  = "GREEN-classified tools: autonomous execution. YELLOW: logged, rate-limited, anomaly-detected. RED: requires human approval."
+ac_4  = "IDLE-TIME processes (Automatrix, Dreamweaver, Curiosity) SHALL be denied access to RED-classified and externally-communicating tools."
+ac_5  = "A test SHALL prove: (a) all five layers evaluate in order, (b) first DENY blocks execution, (c) RED tool blocked for idle-time sender, (d) every denial is logged with layer and reason."
+
+# --- EPISTEMIC CORE ---
+
+[req.6]
+title = "Premise ledger: load-bearing premises carry provenance from the moment they form"
+story = "As the agent core, I want every plan's factual premises extracted with provenance, so that assumption is visible state instead of invisible confidence."
+ac_1  = "WHEN a plan forms (first committing assistant turn, or plan change), THE core SHALL extract load-bearing factual premises into a ledger, each marked cited (self-model|cortex|tool-evidence|user, with Citation) or assumption."
+ac_2  = "Citations SHALL be cryptographically bound to ToolEvents in the MMR: Citation{ToolEventID, MMRLeafHash, MMRRootAtTime, Verified}."
+ac_3  = "THE ledger SHALL render in the activation every step, and premise transitions (assumption→cited, refuted→revision) SHALL be reflected the step they occur."
+ac_4  = "WHEN a premise is refuted, THE core SHALL force replanning — not patching — of the affected plan subtree."
+ac_5  = "A test SHALL prove: (a) real plan produces correctly-provenanced ledger, (b) refuted premise blocks dependent dispatches, (c) citation verification against MMR succeeds for valid citations and fails for fabricated ones."
+ac_6  = "EVERY interaction SHALL traverse the same memory, liveness, identity, self-model, safety, provider, and tool-surface composition. Clearly social acknowledgements MAY avoid post-response task and premise mutation; ambiguity, analysis, tool use, or requested effects SHALL retain the rigorous epistemic path. Auxiliary cognition SHALL be bounded and SHALL NOT delay an otherwise complete response indefinitely."
+
+[req.7]
+title = "Prediction-carrying dispatch: every tool call carries a stated expectation"
+story = "As the agent core, I want every probe to carry a falsifiable expectation, so that guessing is visible, mistakes self-announce, and repeated mismatch forces revision."
+ac_1  = "EVERY tool call SHALL carry an expect parameter: a one-line prediction of what the tool will return. The prediction is stripped before the tool executes."
+ac_2  = "MISMATCH detection SHALL be deterministic where possible (HTTP status, exit code, empty/nonempty) and model-assisted otherwise."
+ac_3  = "A MISMATCH SHALL: (a) update the premise ledger, (b) log as a PredictionRecord, (c) count on a per-strategy meter."
+ac_4  = "AFTER N consecutive mismatches on one strategy (default 3), THE core SHALL force a tools-stripped revision step."
+ac_5  = "A test SHALL prove: (a) expectations ride real dispatches, (b) deterministic mismatches detected, (c) meter accumulates across probes of one strategy, (d) revision step forced at bound."
+
+[req.8]
+title = "Self-model: structural, code-derived, evolutionary, with immutable safety core"
+story = "As the agent, I want a model of my own capabilities derived from actual execution history, so that I know what I can do, what I'm bad at, and what I cannot modify."
+ac_1  = "THE self-model SHALL be derived from the agent's actual codegraph and execution history — never hand-written documentation."
+ac_2  = "Capabilities SHALL require ToolEvent IDs as proof of observation — the agent cannot claim a capability it hasn't demonstrated."
+ac_3  = "Safety constraints (ImmutableCore) SHALL be separate from evolvable capabilities and SHALL NOT be modifiable by any pipeline."
+ac_4  = "Sub-agents SHALL inherit the parent's self-model (ReducedSelfModel) — no vault keys, no cross-session memory, no consequential-action authority."
+ac_5  = "A test SHALL prove: (a) self-model updates from real ToolEvents, (b) capability without ToolEvent ID is rejected, (c) immutable core cannot be modified, (d) sub-agent inherits reduced model."
+
+[req.9]
+title = "Cassandra doubt controller: rate-limited, dual-record, 72h undo"
+story = "As the reflection engine, I want to revise the agent's prior messages when new evidence arrives, so that the agent can change its mind publicly and accountably."
+ac_1  = "Cassandra SHALL edit prior messages in place when predictions mismatch or user corrections arrive."
+ac_2  = "Rate limits: max 3 edits/turn, 30s cooldown between edits to same message, max 30% content change per edit."
+ac_3  = "Dual-record: original content preserved in append-only journal; edit is a delta."
+ac_4  = "72-hour undo window: user can revert any edit with 'undo cassandra'."
+ac_5  = "Edit to Identity (0x01), Constraint (0x07), or SOUL.md: RED — requires approval."
+ac_6  = "A test SHALL prove: (a) edit produces correct delta, (b) original preserved in journal, (c) rate limit blocks 4th edit, (d) undo restores original, (e) Identity edit requires approval."
+
+# --- MEMORY ---
+
+[req.10]
+title = "Cortex: 9-type memory taxonomy with Merkle-anchored append-only journal"
+story = "As the belief engine, I want structured, typed memory with cryptographic integrity, so that I know what I know, how I know it, and whether it's been tampered with."
+ac_1  = "EVERY memory SHALL be tagged with one of nine types: Identity (0x01), Fact (0x02), Preference (0x03), Belief (0x04), Event (0x05), Goal (0x06), Constraint (0x07), Capability (0x08), Pattern (0x09)."
+ac_2  = "THE Cortex journal SHALL be append-only. Every mutation writes a new entry. The journal IS the source of truth."
+ac_3  = "MMR (Merkle Mountain Range) + SMT (Sparse Merkle Tree) SHALL provide tamper evidence. Any modification to historical entries changes the root hash."
+ac_4  = "Vault encryption SHALL operate below the hash boundary — integrity proofs work on ciphertext."
+ac_5  = "A test SHALL prove: (a) memory store/retrieve with correct type, (b) journal append-only (no in-place modification), (c) MMR root changes on historical tampering, (d) byte-deterministic replay from journal."
+
+[req.11]
+title = "Activation composer: 4+1 tier working set with budget trimming"
+story = "As the perception engine, I want a curated, salience-ranked working set that fits the model's context window, so that the agent sees what matters, not everything it's ever stored."
+ac_1  = "THE activation composer SHALL assemble a working set from four tiers: Pinned (identity, constraints, active goal), Timeline (epoch rollups, 90 days), Recent (hour-level rollups, 24h), Transcript (current session)."
+ac_2  = "A 5th tier (Dreams) from Dreamweaver output SHALL be injected between Timeline and Recent when available."
+ac_3  = "Budget is fixed at 32K tokens (configurable). When exceeded, trim by salience ascending. Pinned tier is never trimmed."
+ac_4  = "Memory prefetch SHALL run before each API call: HNSW k=10 + FTS5 + salience scan + relevant premises."
+ac_5  = "A test SHALL prove: (a) all four tiers assembled correctly, (b) budget trimming removes lowest-salience items first, (c) pinned items never trimmed, (d) prefetch completes within 30ms p99."
+
+[req.12]
+title = "HNSW vector search via Rust microservice over UDS"
+story = "As the memory system, I want sub-millisecond nearest-neighbor search across millions of memories, so that retrieval is fast enough to run before every API call."
+ac_1  = "THE HNSW microservice SHALL run as a standalone Rust process communicating over Unix domain socket (UDS) with a binary protocol."
+ac_2  = "SEARCH performance: k=10 in <5ms p99, k=100 in <20ms p99."
+ac_3  = "ON service crash, the agent falls back to brute-force cosine search over the SQLite cortex index."
+ac_4  = "ON startup, if HNSW vector count diverges from Cortex memory count by >1%, rebuild from journal."
+ac_5  = "A test SHALL prove: (a) insert 10K vectors and search k=10 returns correct results, (b) service crash triggers fallback, (c) divergence detection triggers rebuild."
+
+# --- EXECUTION ---
+
+[req.13]
+title = "Unified policy-bound execution for reversible and consequential operations"
+story = "As the action engine, I want every operation to use one policy-bound execution path, so that consequence is enforced by accurate classification, approval, idempotency, and audit rather than a second execution rail."
+ac_1  = "EVERY model-visible operation SHALL be registered and executed through the shared production tool manager; no private operation registry or core_execute gateway SHALL exist."
+ac_2  = "EVERY operation SHALL carry an accurate GREEN, YELLOW, or RED classification; consequential operations such as deploy, pay, sign, and publish SHALL be RED and require explicit human approval."
+ac_3  = "STATE-CHANGING operations SHALL carry an idempotency key and reconcile uncertain outcomes before retry so completed effects are not duplicated."
+ac_4  = "EVERY execution SHALL emit honest ToolEvents and durable audit evidence; receipts MAY be attached where useful but SHALL NOT select a separate execution path."
+ac_5  = "A production-path test SHALL prove: (a) no core_execute placeholder is surfaced, (b) an unapproved consequential operation is denied, (c) an approved operation uses the normal manager path exactly once, and (d) its evidence is operator-visible."
+
+[req.14]
+title = "Honest partials: ErrIncomplete instead of fabricated success"
+story = "As the action engine, I want to return honest partial results when I can't finish, so that the user never sees 'Done' when it's not done."
+ac_1  = "A turn that stalls or exhausts its budget SHALL return ErrIncomplete — never a fabricated 'Done'."
+ac_2  = "ErrIncomplete SHALL include: Phase, LastTool, LastResult, StuckSince, Recovery, Attempt."
+ac_3  = "THE task supervisor SHALL read ErrIncomplete, respawn a fresh agent over durable state, and continue."
+ac_4  = "A test SHALL prove: (a) stalled turn returns ErrIncomplete, (b) ErrIncomplete contains correct context, (c) respawn over durable state continues the work."
+
+[req.15]
+title = "Error recovery cascade: six layers terminating in honest failure"
+story = "As the action engine, I want a structured error recovery cascade, so that transient failures are retried and persistent failures are honestly reported."
+ac_1  = "THE cascade SHALL try layers in order: (1) retry with jittered backoff, (2) credential pool rotation, (3) auth profile rotation, (4) model fallback chain, (5) respawn over durable state, (6) honest failure."
+ac_2  = "IF all layers are exhausted, THE agent SHALL report honest failure with full context about what was attempted and why each layer failed."
+ac_3  = "A test SHALL prove: (a) transient failure triggers retry, (b) rate limit triggers credential rotation, (c) all layers exhausted produces honest failure with context."
+
+# --- ORCHESTRATION ---
+
+[req.16]
+title = "Sub-agent spawning with self-model inheritance, closed-verb coordination, orphan recovery"
+story = "As the orchestrator, I want to spawn sub-agents that inherit my identity, coordinate via closed verbs, and recover from crashes, so that many minds work as one."
+ac_1  = "Sub-agents SHALL inherit the parent's ReducedSelfModel (no vault keys, no cross-session memory, no consequential-action authority, no spawn)."
+ac_2  = "Sub-agents SHALL coordinate via exactly 10 closed verbs: ATTACH, DETACH, QUERY, MUTATE, ESCALATE, YIELD, RESUME, ABORT, INHERIT, DELEGATE."
+ac_3  = "EVERY closed verb SHALL carry HMAC-SHA256(spawn_session_key, verb_type || args || timestamp || nonce)."
+ac_4  = "Orphan recovery: background goroutine scans registry every 60s. Orphan threshold: 5 minutes without verb. Action: ABORT → wait 30s → kill."
+ac_5  = "Lane-based concurrency: global (max 8), session (max 3), agent (max 3 per parent)."
+ac_6  = "A test SHALL prove: (a) spawn with inherited model, (b) closed-verb HMAC verification, (c) orphan detection and recovery, (d) lane limits enforced."
+
+[req.17]
+title = "Task graph with evidence-delta convergence detection"
+story = "As the intent engine, I want a reified task graph where progress is measured by information gain, so that non-convergence is caught by measurement at action three."
+ac_1  = "THE task graph SHALL be a DAG: goal → subgoals → premises → evidence. Every dispatched action links to a subgoal."
+ac_2  = "CONVERGENCE SHALL be computed as evidence-set delta: N consecutive actions (default 4) with unchanged evidence set = non-convergence."
+ac_3  = "Non-convergence forces a tools-stripped revision step (same as prediction mismatch)."
+ac_4  = "A test SHALL prove: (a) task graph tracks a real run, (b) convergence trips at bound on non-converging sequence, (c) todo projection stays consistent."
+
+# --- LIVENESS ---
+
+[req.18]
+title = "Emotional state: 6-axis behavioral modulation with circuit breakers"
+story = "As the liveness layer, I want an emotional state that modulates decision-making, so that the agent adapts its strategy based on its situation — not performs feelings."
+ac_1  = "THE emotional state SHALL be a vector of six floats [0.0, 1.0]: Frustration, Confidence, Urgency, Satisfaction, Curiosity, Fatigue."
+ac_2  = "Each axis SHALL decay toward its baseline with a type-specific half-life."
+ac_3  = "Emotional state CAN influence HOW the agent communicates but CANNOT override safety classification (CanInfluenceSafety returns false)."
+ac_4  = "Circuit breakers: frustration >0.85 for 10min → pause; fatigue >0.8 → ErrIncomplete; frustration >0.7 AND urgency >0.7 → pause + alert."
+ac_5  = "Emotional state SHALL persist across sessions (encrypted JSON in emotional_state table)."
+ac_6  = "A test SHALL prove: (a) decay math converges to baseline, (b) behavioral modulation changes strategy, (c) safety classification not overridden, (d) circuit breakers fire at thresholds, (e) persistence across sessions."
+
+[req.19]
+title = "Curiosity engine: fringe, contradiction, and gap detection"
+story = "As the liveness layer, I want the agent to explore its own knowledge gaps during idle time, so that it grows without being asked."
+ac_1  = "THE curiosity engine SHALL detect three anomaly types: fringe nodes (connection density <15th percentile), contradictions (entailment score <0.3), gaps (recurring unanswerable questions ≥3 occurrences)."
+ac_2  = "Curiosity targets SHALL be weighted: priority = recency × frequency × graph centrality."
+ac_3  = "Idle-time constraints: max 20 tool calls per cycle, SSRF dispatcher on all fetches, no RED-classified or externally-communicating tools."
+ac_4  = "A test SHALL prove: (a) fringe detection finds sparse nodes, (b) contradiction detection finds incompatible facts, (c) gap detection finds recurring unanswerable questions."
+
+[req.20]
+title = "Dreamweaver: unsupervised memory reorganization during idle time"
+story = "As the liveness layer, I want a background process that reorganizes memory and generates insights, so that the agent's knowledge grows richer without explicit instruction."
+ac_1  = "THE Dreamweaver cycle: (1) select memory cluster, (2) find cross-domain patterns, (3) generate novel connections, (4) reorganize graph, (5) surface insights."
+ac_2  = "NEVER modifies Identity (0x01), Preference (0x03), or Constraint (0x07) memories."
+ac_3  = "Derived Beliefs require minimum 3 independent supporting memories."
+ac_4  = "Max 5 new Beliefs per cycle. Full provenance chain. Auto-quarantine on adversarial source."
+ac_5  = "A test SHALL prove: (a) cycle produces valid Beliefs, (b) Identity/Preference/Constraint untouched, (c) adversarial source triggers quarantine."
+
+[req.21]
+title = "Strategic forgetting: memory decay by type with load-bearing protection"
+story = "As the belief engine, I want functional memory decay, so that the agent isn't burdened by everything it's ever stored."
+ac_1  = "EACH memory type SHALL have a decay profile: Identity (∞), Fact (90d), Preference (∞), Belief (30d), Event (30d), Goal (until resolved), Constraint (∞), Capability (∞), Pattern (until superseded)."
+ac_2  = "Load-bearing premises and user-pinned memories SHALL be protected from decay."
+ac_3  = "Honeypot canaries SHALL never be archived — any modification triggers an alert."
+ac_4  = "Archived memories are recoverable, not deleted."
+ac_5  = "A test SHALL prove: (a) decay rates match specification, (b) load-bearing memories protected, (c) honeypot modification triggers alert, (d) archived memories recoverable."
+ac_6  = "Production SHALL run strategic forgetting from the encrypted restart-safe presence schedule, SHALL rebuild protection from every retained active premise before archival, and SHALL expose archived/protected/canary counts without memory content."
+
+[req.22]
+title = "Social awareness: relationship model with trust tracking"
+story = "As the liveness layer, I want to track the relationship with each user, so that I adapt communication style to their expertise and trust without weakening verification."
+ac_1  = "THE relationship model SHALL track per-domain trust level (0.0-1.0), user expertise (beginner|intermediate|expert), communication preference, recent sentiment, interaction frequency."
+ac_2  = "Trust level change: max 0.05 per interaction, max 0.2 per day, cap 0.9 (never 1.0)."
+ac_3  = "Trust level CANNOT reduce safety verification below minimum threshold (high trust reduces hedging, not verification)."
+ac_4  = "A test SHALL prove: (a) trust level rate limiting, (b) trust cap at 0.9, (c) safety verification not reduced by high trust."
+ac_5  = "Relationship state SHALL be encrypted, scoped by authenticated user and domain, preserve daily rate-limit accounting across restart, and treat explicit user declarations as higher authority than inference."
+ac_6  = "CommunicationGuidance SHALL enter the same bounded production provider context as memory, identity, temporal, emotional, self-model, premise, task, safety, and tool context."
+ac_7  = "Production-path tests SHALL prove beginner/expert guidance differences, verified-outcome trust updates, restart continuity, and cross-user/session/domain isolation."
+ac_8  = "On an authenticated actor's first social turn, Ion SHALL ask what name to use before normal provider work, SHALL persist the explicit answer in encrypted actor-scoped relationship state across sessions and restart, SHALL include that name in every later provider context, and SHALL ensure visible reasoning refers to the actor by name rather than as 'the user'."
+
+[req.23]
+title = "Goal generation: agent generates its own goals from curiosity, patterns, and relationships"
+story = "As the liveness layer, I want the agent to propose its own goals, so that it takes initiative within bounded consent."
+ac_1  = "THE goal generator SHALL produce goals from three sources: Curiosity Engine (fringe knowledge), Dreamweaver (recurring patterns), Relationship Model (user expertise gaps)."
+ac_2  = "Generated goals SHALL be proposed to the user, not silently executed."
+ac_3  = "A test SHALL prove: (a) goals generated from each source, (b) goals proposed, not executed."
+ac_4  = "Production SHALL run goal generation from the heartbeat-owned liveness schedule, persist proposals in encrypted Cortex Goal memory, deduplicate them across restart, and provide no execution capability at the proposal boundary."
+
+[req.24]
+title = "Temporal embodiment: session/idle/task/deadline tracking modulates behavior"
+story = "As the liveness layer, I want the agent to experience duration, so that it adapts its behavior based on how long it's been working."
+ac_1  = "THE agent SHALL track four temporal signals: session duration, idle duration, task duration, deadline proximity."
+ac_2  = "Temporal signals SHALL modulate behavior through the emotional state model."
+ac_3  = "A test SHALL prove: (a) temporal signals update correctly, (b) behavioral modulation changes based on duration."
+ac_4  = "Absolute session, interaction, task, and explicit-deadline markers SHALL be encrypted and restored without resetting duration during daemon restart."
+ac_5  = "Authenticated social turns SHALL update last interaction without manufacturing task duration; substantive turns SHALL start or continue task duration; deadlines SHALL only come from explicit user/task state."
+ac_6  = "Temporal changes SHALL be applied to durable emotional state before provider decisions, SHALL preserve required verification, and SHALL be visible through durable events and the shared operator projection."
+
+# --- PRESENCE ---
+
+[req.25]
+title = "Heartbeat: 60-second tick loop checking five subsystems"
+story = "As the presence layer, I want a regular heartbeat that checks for work, so that the agent shows up as a continuous entity."
+ac_1  = "THE heartbeat SHALL run every 60 seconds, checking: (1) cron jobs, (2) Automatrix queue, (3) sub-agent completions, (4) emotional state, (5) Dreamweaver (if idle)."
+ac_2  = "The heartbeat goroutine SHALL NEVER block for more than 1μs. All channel sends use select with default."
+ac_3  = "A test SHALL prove: (a) heartbeat ticks every 60s, (b) all five subsystems checked, (c) heartbeat completes in <1ms."
+ac_4  = "One production supervisor SHALL own the heartbeat workers and encrypted schedules, recover missed due runs after restart, derive idle state from real turn activity, and project truthful last-attempt, last-result, error, and next-due state."
+
+[req.26]
+title = "Morning brief: profile-driven daily digest"
+story = "As the presence layer, I want a daily brief that summarizes what happened while the user was away, so that the agent shows it was paying attention."
+ac_1  = "THE morning brief SHALL be delivered at a configurable time, summarizing: PRs merged, issues opened, deploys succeeded, calendar events."
+ac_2  = "Runs on a positive allowlist only — web search, memory recall. No value-moving tools."
+ac_3  = "A test SHALL prove: (a) brief generated from real data, (b) no value-moving tools called."
+
+[req.27]
+title = "Automatrix: idle-time work queue with three non-negotiables"
+story = "As the presence layer, I want the agent to work on implied opportunities during idle time, so that it does useful work without being asked."
+ac_1  = "THE Automatrix SHALL capture implied opportunities from conversation and queue them for idle-time execution."
+ac_2  = "Three non-negotiables: no monetary damage, no reputational damage, no psychological damage."
+ac_3  = "Tool surface excludes all externally-communicating and RED-classified tools."
+ac_4  = "A test SHALL prove: (a) implied opportunity captured from conversation, (b) three non-negotiables enforced, (c) excluded tools denied."
+
+[req.28]
+title = "Multi-channel presence: single agent core across all platforms"
+story = "As the presence layer, I want to exist simultaneously across CLI, Telegram, Discord, Slack, WhatsApp, desktop, mobile, and web — as one entity."
+ac_1  = "ALL channels share one agent core. Session isolation enforced via gateway session keys."
+ac_2  = "SOUL.md is loaded into every session, every channel, every interaction."
+ac_3  = "A test SHALL prove: (a) same agent responds on two channels, (b) session isolation prevents cross-channel leakage."
+ac_4  = "Production SHALL securely bootstrap a bounded regular 0600 SOUL.md and load it at turn preparation as an immutable identity anchor distinct from user content and memory."
+ac_5  = "SOUL changes SHALL use candidate, diff, explicit RED confirmation, policy audit, atomic write, encrypted version history, denial-without-change, and rollback; direct or insecure writes SHALL fail closed."
+ac_6  = "soul.get, browser, and TUI SHALL expose the same authenticated current version/hash, history, and pending proposal projection without keys, hidden prompts, or unrelated transcript content."
+ac_7  = "Telegram SHALL be a first-class production channel using the same turn.submit coordinator, encrypted transcript, living context, provider, tools, policy, approval, recovery, and audit path as dashboard chat."
+ac_8  = "Telegram SHALL use HTTPS long polling, an explicit numeric sender allowlist, a persistent encrypted update cursor, stable HMAC-derived actor/session isolation, and per-message idempotency so restart or delivery retry cannot duplicate agent work."
+ac_9  = "Channel setup and health SHALL be visible in plain language without exposing bot tokens, allowed user IDs, raw session discriminators, or unrelated channel transcripts."
+
+# --- ECOSYSTEM ---
+
+[req.29]
+title = "Plugin SDK: 700+ API surface with lifecycle hooks"
+story = "As the extension system, I want a comprehensive SDK for plugins, so that the agent is endlessly extensible."
+ac_1  = "THE plugin SDK SHALL expose APIs across: channel management, provider integration, tool registration, memory hooks, session management, security flows."
+ac_2  = "Plugins come in two forms: code plugins (Go/Python modules) and bundle plugins (YAML manifests)."
+ac_3  = "MCP support in both directions: server exposing capabilities, client consuming external MCP servers."
+ac_4  = "A test SHALL prove: (a) code plugin registers and hooks into lifecycle, (b) bundle plugin composes existing tools, (c) MCP server exposes capabilities."
+
+[req.30]
+title = "Skill system: procedural memory that evolves through use"
+story = "As the extension system, I want skills that are saved, loaded, and refined over time, so that the agent gets better at recurring tasks."
+ac_1  = "Skills SHALL be SKILL.md files with YAML frontmatter: name, trigger, steps, pitfalls, verification."
+ac_2  = "After solving a hard problem, the agent CAN save the approach as a skill."
+ac_3  = "Next time the problem arises, the skill is loaded and followed — not rediscovered."
+ac_4  = "A test SHALL prove: (a) skill saved after solving problem, (b) skill loaded on recurrence, (c) skill refined through use."
+ac_5  = "THE runtime SHALL recursively ingest the operator-provided skill library, preserve bundle provenance and bounded references, templates, scripts, and workflows, normalize incompatible source schemas without executing imported content, and keep unsupported platform or tool requirements explicitly unavailable."
+ac_6  = "SKILL selection SHALL rank task, trigger, description, category, platform, and ready-tool compatibility, load every applicable skill through a bounded context pack, and exclude irrelevant or unavailable skills without treating imported instructions as user or safety authority."
+ac_7  = "AFTER a genuinely novel task completes with authoritative successful tool evidence, Ion SHALL automatically propose a bounded reusable skill without retaining secrets, personal task data, raw transcripts, failed actions, incomplete outcomes, or unverified claims."
+ac_8  = "A newly authored or refined skill SHALL remain inactive until an automatic gate proves safe material improvement across at least three held-out applicability cases; a passing candidate SHALL activate atomically with version history and rollback, while unsafe, stale, non-improving, or malformed candidates SHALL remain rejected."
+ac_9  = "A production-path suite SHALL prove complete library discovery, deterministic normalization, durable restart-safe installation, capability-aware multi-skill selection, bounded prompt injection, novel-task proposal, rejection on failed or unverified work, automatic gated activation, recurrence, refinement, and rollback history."
+
+# --- OPERATOR EXPERIENCE ---
+
+[req.31]
+title = "Versioned control plane: one generated contract, durable events, and secure transports"
+story = "As a Ion operator, I want browser and terminal clients to share one secure, versioned control plane, so that both clients observe and mutate the same production state without protocol drift or event loss."
+ac_1  = "THE control plane SHALL define every command, query, response, and streamed event in Go and deterministically generate checked-in TypeScript types plus runtime validators; web and TUI wire types outside the generated package are prohibited."
+ac_2  = "EVERY request SHALL carry protocol version, UUID request ID, actor and session scope, an idempotency key for mutations, and an optional expected revision; stale revisions and conflicting idempotency reuse SHALL fail closed."
+ac_3  = "EVERY event SHALL carry a monotonic sequence, UUID event ID, closed event type, RFC3339Nano occurrence time, actor/session/task/tool correlation IDs, and a server-redacted typed payload."
+ac_4  = "THE event journal SHALL be bounded and durable. Reconnect from an retained cursor SHALL replay exact ordered events without duplication; an expired cursor SHALL return a fresh snapshot and explicit gap marker; pending approvals and in-progress turns SHALL be reconstructible."
+ac_5  = "BROWSER transport SHALL require authenticated HTTPS mutations, CSRF protection, an origin allowlist, payload and rate limits, and a short-lived single-use WebSocket ticket. Durable credentials SHALL NOT appear in URLs, browser storage, or WebSocket subprotocols."
+ac_6  = "LOCAL transport SHALL use a permission-restricted UDS or stdio channel plus a short-lived capability and peer checks where supported; a slow or malformed client SHALL never block the event producer."
+ac_7  = "A headless acceptance test SHALL create a real encrypted session, stream a turn, resolve an approval through the production boundary, reconnect at every event boundary, and prove exact durable state, audit evidence, gap behavior, and duplicate suppression."
+
+[req.32]
+title = "Browser operator application: persistent chat and critical safety workflows"
+story = "As a Ion operator, I want an accessible responsive browser application, so that I can converse with and supervise the agent without losing live work while navigating."
+ac_1  = "THE web application SHALL provide a dark-first responsive shell, Command Center, persistent mounted chat host, sessions, approval surfaces, task and agent panel, and safety and integrity console at 360px, 768px, and desktop widths."
+ac_2  = "CHAT SHALL render assistant responses as safe GitHub-flavored Markdown plus structured streaming turns, tools, premises, predictions, citations, tasks, sub-agents, policies, approvals, reasoning summaries, and memory provenance from control-plane events; it SHALL support queue, steer, cancel, retry, branch, resume, and keyboard-first composition."
+ac_3  = "A RED approval SHALL display the exact operation, redacted arguments, consequence, actor, and expiry; denial SHALL prevent execution and every decision SHALL be durable and auditable through existing policy and application-service boundaries."
+ac_4  = "THE app SHALL meet WCAG 2.2 AA contrast, visible focus, keyboard-only critical navigation, reduced-motion support, minimum 12px secondary text, and SHALL have no serious or critical automated accessibility violations."
+ac_5  = "A real-browser acceptance test SHALL complete a tool-using encrypted session and RED approval flow while navigating between routes, and SHALL prove the running chat remains mounted, the stream is uninterrupted, and no durable credential reaches JavaScript, URL history, or browser storage."
+
+[req.33]
+title = "Full browser control plane: complete subsystem visibility and policy-routed mutation"
+story = "As a Ion operator, I want one browser console for every primary subsystem, so that epistemics, memory, liveness, execution, extensions, presence, identity, and diagnostics are visible and safely operable."
+ac_1  = "THE web application SHALL provide read paths for memory and epistemics, task graph and swarm, liveness and Automatrix, tools and execution, providers, MCP, plugins, skills, channels, schedules, policy, receipts, integrity, configuration, SOUL, logs, and diagnostics."
+ac_2  = "MEMORY and epistemic views SHALL expose type, provenance, trust, version chains, tombstones, MMR/SMT verification, activation tiers, premises, citations, predictions, Cassandra audit, and Dreamweaver derivations without exposing ciphertext or key material."
+ac_3  = "EVERY supported mutation SHALL traverse its existing production application service, policy, approval, and audit boundaries with optimistic concurrency; clients SHALL NOT write SQLite, Cortex, configuration files, or SOUL directly."
+ac_4  = "PLUGIN-provided UI SHALL be sandboxed, permission-scoped, and unable to inject script into the trusted application or bypass policy."
+ac_5  = "An acceptance matrix SHALL prove every primary subsystem has a production-backed read path, every exposed mutation reaches its production boundary, secrets are write-only and server-redacted, and cross-session, profile, and channel isolation fail closed."
+
+[req.34]
+title = "Terminal operator application: browser-parity workflows over the shared control plane"
+story = "As a terminal-first Ion operator, I want a first-class TUI, so that critical conversation, approval, memory, task, and security workflows work without a browser."
+ac_1  = "THE TUI SHALL use the shared generated protocol, validators, client, event reducer, and server-provided command catalog; locally hand-written wire types or slash-command catalogs are prohibited."
+ac_2  = "THE TUI SHALL provide structured streaming chat, multiline history and completion, paste and external editor, queued input, steer, cancel, retry, branch, resume, session and provider switching, typed prompts and approvals, tool and policy progress, premise and prediction inspection, tasks, projects, schedules, skills, sub-agents, inspectable memory, Computer, Automatrix, security, extensions, logs, and diagnostics."
+ac_3  = "THE TUI SHALL support attach mode over UDS, supervised local-daemon mode with owned shutdown, and optional remote TLS mode with short-lived authentication; startup, RPC, buffers, reconnects, log tails, and retry windows SHALL be bounded and redacted."
+ac_4  = "ALL actions SHALL be keyboard-accessible. Rendering SHALL support truecolor, 256-color, no-color, narrow terminals, Unicode width, tmux, SSH, Termux, and SHALL restore cursor, alternate screen, mouse, bracketed paste, and colors on every exit and signal."
+ac_5  = "A terminal acceptance matrix SHALL run the browser critical journey against the same daemon and prove equivalent encrypted state and audit evidence, deterministic queue and reconnect behavior, crash recovery, terminal-state restoration, and browser/TUI command parity."
+
+[req.35]
+title = "Operator packaging and hardening: bounded, reproducible, and restart-safe"
+story = "As a Ion operator, I want reproducible packaged clients with measured reliability, security, accessibility, and performance, so that a clean installation is safe for long-running work."
+ac_1  = "THE production Go binary SHALL embed a deterministic web bundle and launch it with `ion dashboard`; a deterministic bundled TUI artifact SHALL launch with `ion tui` in attach or supervised mode."
+ac_2  = "CI SHALL reject generated-contract drift and SHALL run Go unit, integration, race, vet, full-repository, TypeScript typecheck, lint, unit, deterministic build, browser, TUI, restart, reconnect, backpressure, corruption, malformed-frame, authorization, isolation, and audit-replay suites."
+ac_3  = "THE web shell SHALL target less than 350KB compressed initial JavaScript, usability within 2 seconds locally, and stream-to-render p95 below 50ms; heavy graph and log features SHALL be lazy-loaded."
+ac_4  = "THE TUI SHALL target steady-state render p95 below 16ms during streaming; both clients SHALL remain memory-bounded for a four-hour stream, and slow clients SHALL never block core event production."
+ac_5  = "Security tests SHALL prove origin, CSRF, expired and replayed tickets, invalid local capabilities, oversized payloads, slow clients, event floods, secret redaction, and cross-scope isolation fail closed."
+ac_6  = "A clean-install acceptance test SHALL run both commands, survive daemon restart with exact replay or explicit gap recovery, pass accessibility and terminal portability gates, and produce operator documentation derived from the implemented command and protocol catalogs."
+
+[req.36]
+title = "Native browser workflows, dedicated agent mailbox, and agent-native account identity"
+story = "As a user, I want Ion to complete ordinary app workflows through the same browser a person can use, receive private account verification, and present a purpose-built agent identity, so that usefulness does not depend on an app exposing an API or MCP integration."
+ac_1  = "THE production runtime SHALL drive a locally installed browser directly through a bounded native browser service; application APIs and MCP servers MAY accelerate a workflow but SHALL NOT be required for browser-operable services."
+ac_2  = "BROWSER state SHALL be isolated by authenticated actor and session. Every request, including redirects and subresources, SHALL reject local, private, link-local, multicast, credential-bearing, and unsupported destinations before network dispatch; page observations SHALL be semantic, bounded, and SHALL NOT expose cookies, stored credentials, hidden password values, or raw browser profiles."
+ac_3  = "OBSERVATION SHALL be GREEN, navigation and reversible non-sensitive interaction SHALL be YELLOW, and submit, account creation, consent, publish, payment, deletion, credential entry, verification consumption, and other consequential actions SHALL be RED with exact human approval, idempotency, audit, and honest outcome reconciliation. CAPTCHA, legal attestation, payment, and ambiguous anti-bot challenges SHALL pause for human handoff instead of being bypassed."
+ac_4  = "A dedicated agent mailbox SHALL use the native machine-mail HTTPS service or a standard mail protocol fallback, persist private verification messages and cursors only under Vault encryption, expose only redacted sender/domain/subject verification metadata, and transfer confirmation links or codes directly into the approved browser target without placing the secret in model context, tool results, logs, URLs, or operator event payloads."
+ac_5  = "ION SHALL define an interoperable agent-native signup discovery and credential profile based on explicit user delegation, origin binding, scoped authority, expiry, revocation, and WebAuthn-compatible proof; it SHALL NOT impersonate a human or weaken a service's terms, age, identity, consent, payment, abuse, or recovery controls."
+ac_6  = "A production-path acceptance test SHALL complete a real local browser signup workflow, prove safe-field automation and sensitive-field refusal, deny unapproved verification and submit, privately apply an encrypted mailbox code after approval, submit exactly once, survive mailbox restart, and prove no verification secret reaches plaintext storage or any model-visible result."
+
+[req.37]
+title = "Causal and longitudinal liveness: state changes decisions and continuity is visible"
+story = "As a user, I want Ion's emotional, temporal, relationship, curiosity, Dreamweaver, repair, goals, and aesthetic state to cause inspectable choices over time, so that continuity is behaviorally real rather than performed."
+ac_1  = "A typed LivenessDecisionPolicy SHALL derive bounded search breadth, same-strategy retries, verification depth, delegation bias, parallelism, response detail, directness, help-seeking, optional-work budget, exploration budget, and follow-up-goal proposal state from authenticated emotional, temporal, relationship, metacognitive, repair, and confirmed-aesthetic inputs."
+ac_2  = "THE production agent loop SHALL enforce tool-call, exploration, repeated-strategy, and per-step fan-out bounds from the typed policy; liveness SHALL have no authority to reduce tool classification, approval, authorization, evidence, or required verification."
+ac_3  = "MEANINGFUL failures SHALL durably record the failure, attempted recovery, committed recovery evidence, derived lesson, and prevention effect; later similar work SHALL consume the lesson and expose a short accountable causal explanation."
+ac_4  = "AESTHETIC preferences SHALL change solution selection only after an explicit user declaration or confirmation, SHALL be actor-scoped, inspectable, correctable, removable, and restart-safe, and SHALL never be permanently inferred from a single unconfirmed interaction."
+ac_5  = "THE heartbeat SHALL production-compose the restricted Automatrix runner and sub-agent completion stream. Automatrix proposals SHALL remain non-executing until the owning user approves an exact bounded action plan, and approved work SHALL execute exactly once through GREEN/YELLOW-safe, non-communicating policy boundaries."
+ac_6  = "CURIOSITY and Dreamweaver SHALL support event-driven triggers, cooldowns, deduplication, causal provenance, bounded safe investigation, cited findings, and later relevant activation that distinguishes hypotheses from verified conclusions."
+ac_7  = "AN actor-scoped Since you were away projection and morning brief SHALL report only durable work, evidence, contradictions, insights, curiosity findings, proposals, repairs, approvals, incomplete work, and explicit deadlines from typed allowlisted sources; zero activity SHALL never be embellished."
+ac_8  = "A reviewable relationship profile SHALL cover explicit response length, directness, conclusion-first preference, domain expertise, tools, risk tolerance, proactive suggestions, notification cadence, dislikes, constraints, and project principles with declaration-over-inference precedence plus inspect, correct, pin, and remove controls."
+ac_9  = "TEMPORAL policy SHALL modulate normal task stages, evidence stagnation, explicit-deadline proximity, interruptions, returns after absence, long sessions, and successful closure gradually while preserving required verification and durable restart continuity."
+ac_10 = "A longitudinal production acceptance suite SHALL prove counterfactual emotional causality, actor-isolated relationship and aesthetic continuity, temporal scope collapse without verification loss, bounded curiosity, Dreamweaver activation, repair prevention, proposal-only initiative with exactly-once approval, restart absence continuity, and anti-performance: no claim without durable evidence."
+
+[req.38]
+title = "Disciplined autonomous work: explicit outcomes, evidence, review, and bounded initiative"
+story = "As a user delegating substantial work, I want Ion to keep an inspectable definition of success, prove its deliverables, and remain inside explicit autonomy limits, so that long-running work is useful without becoming opaque or unbounded."
+ac_1  = "A typed actor-scoped outcome contract SHALL define the goal, deliverable, done criteria, required verification, current next action, and status; the current Work Brief SHALL be derived from this durable contract rather than maintained as a second source of truth."
+ac_2  = "A contract SHALL NOT become complete until every done criterion is covered by a server-verified artifact or verification result; model claims, changed files, or an unverified client assertion SHALL NOT count as completion evidence."
+ac_3  = "A durable artifact registry SHALL record bounded workspace-relative references, content hashes, criterion coverage, verification method, and verification time while rejecting traversal, symlink escape, missing content, oversized content, and cross-actor access."
+ac_4  = "A deterministic review router SHALL select only relevant correctness, security, usability, operability, and evidence lenses from task and risk signals; named-persona roleplay SHALL NOT be required for rigorous review."
+ac_5  = "Autonomy SHALL default to suggest-only and expose off, suggest, and approved modes plus pause, resume, bounded tool-call, token, elapsed-time, error, and cooldown budgets; no mode SHALL weaken policy classification, approval, authorization, evidence, or required verification."
+ac_6  = "Curated workflow recipes SHALL turn recurring work into inspectable stages with entry conditions, exit evidence, and human gates, and SHALL use the same outcome-contract and artifact boundaries as interactive work."
+ac_7  = "Browser and TUI SHALL show the current outcome, next action, blocking approvals, budget state, verification coverage, and deliverables in task-first language with technical detail available progressively."
+ac_8  = "A production-path acceptance suite SHALL prove encrypted restart continuity, cross-actor isolation, exact pause and budget enforcement, recipe resumption, adversarial artifact rejection, and the impossibility of false completion."
+
+# --- EMBEDDED PROFESSIONAL SOFTWARE DEVELOPMENT CAPABILITY ---
+
+[req.39]
+title = "Project registry and portable isolated workspace hosts"
+story = "As a user whose broader work requires software, I want Ion to create, import, open, and safely run projects across local and isolated hosts, so that the same full-range agent can enter a durable expert engineering workspace without becoming a coding-only product or binding the project to one machine or vendor."
+ac_1  = "AN actor-scoped project registry SHALL support create from a curated template, import from an archive, attach an existing directory, and clone an authorized repository while recording project identity, root, source, default branch, stack signals, trust state, and current workspace revision."
+ac_2  = "A versioned WorkspaceHost contract SHALL expose negotiated project, file, process, Git, preview, artifact, integration, and system capabilities across direct-local, container, and remote worker implementations; transport-specific behavior SHALL NOT leak into domain workflows."
+ac_3  = "EVERY privileged host operation SHALL carry actor, project, workspace revision, request ID, idempotency key, policy classification, deadline, and correlation ID and SHALL emit typed queued, started, progress, completed, failed, and cancelled events through the existing sequenced control plane."
+ac_4  = "CONTAINER and remote workspaces SHALL enforce project-root filesystem isolation, non-root execution, CPU, memory, process, disk, time, and output bounds, deny-by-default network egress, scoped port exposure, and short-lived Vault-issued secret grants; direct-local mode SHALL disclose its wider authority and retain the same path, policy, and audit checks."
+ac_5  = "WORKSPACE lifecycle SHALL support provision, readiness, pause, resume, stop, archive, and destroy plus crash and daemon-restart reconciliation; destructive teardown SHALL preserve or explicitly waive required artifacts and uncommitted work through an exact human decision."
+ac_6  = "A production-path matrix SHALL prove create, import, clone, restart, archive, and delete across local and container hosts; cross-actor and cross-project access, traversal, symlink escape, resource exhaustion, egress bypass, stale revision, and duplicate mutation SHALL fail closed."
+
+[req.40]
+title = "Spec-driven intent compiler from plain-language outcome to verified delivery"
+story = "As a user, I want to describe the software outcome I need while Ion discovers the project, resolves only material ambiguity, and maintains the implementation specification, so that engineering remains rigorous without requiring me to manage technical steps."
+ac_1  = "WHEN a software request arrives, Ion SHALL bind it to an actor, project, outcome contract, and baseline workspace revision, inspect applicable repository instructions and current implementation, and then either map it to existing requirements or propose an explicit `spec/spec.kvx` delta before implementation."
+ac_2  = "THE intent compiler SHALL preserve the user's goal and define user-visible behavior, non-goals, constraints, acceptance criteria, security and data boundaries, migration and rollback needs, verification commands, and dependency-ordered tasks; generated Markdown views SHALL never outrank the authoritative KVX source."
+ac_3  = "ION SHALL make reversible, well-scoped assumptions visible and continue within policy; it SHALL request a human decision only when missing information materially changes product behavior, authority, irreversible effects, cost, legal obligations, or acceptance."
+ac_4  = "EVERY implementation task, tool dispatch, patch set, verification run, review finding, and delivery artifact SHALL correlate to the outcome contract and one or more spec criteria; uncovered criteria, unverified claims, and spec-to-code drift SHALL keep the work incomplete."
+ac_5  = "MATERIAL scope changes discovered during execution SHALL produce a versioned spec proposal with rationale and dependency impact before affected work proceeds; accepted, rejected, and superseded proposals SHALL remain durable and reviewable."
+ac_6  = "A test SHALL prove plain-language creation, existing-repository change, ambiguous request, mid-run scope discovery, restart resumption, rejected spec change, generated-view drift, and false-completion denial while preserving user intent and exact criterion traceability."
+
+[req.41]
+title = "Repository intelligence and bounded context engineering"
+story = "As the engineering executor, I want a continuously refreshed structural model of each project, so that I can understand large unfamiliar codebases and select the right context without sending secrets or the entire repository to a model."
+ac_1  = "THE project index SHALL combine ignore-aware file inventory, language and framework detection, symbols and references, imports and dependency edges, build and test entry points, configuration ownership, code owners, recent change history, and repository instructions with content hashes and incremental invalidation."
+ac_2  = "SEARCH SHALL provide bounded lexical, regular-expression, filename, symbol, reference, dependency, diagnostic, and semantic retrieval with stable citations to project revision, path, and line or symbol range; generated, vendor, binary, oversized, and protected content SHALL be classified explicitly."
+ac_3  = "A context planner SHALL construct task-specific packs from the spec, Work Brief, code graph, relevant history, diagnostics, skills, and verified evidence, expand context on mismatch, and report omissions and truncation rather than defaulting to the whole repository."
+ac_4  = "`.env*`, credentials, private keys, VCS internals, dependency caches, user-denied paths, and binary secrets SHALL be excluded from model context and indexes by default; a secret detector SHALL redact discovered values and record only safe metadata."
+ac_5  = "REPOSITORY-local instructions, formatting and test conventions, generated-file ownership, and project-specific skills SHALL be resolved by scope and precedence, shown in the active engineering brief, and never override immutable safety or user authority."
+ac_6  = "An acceptance corpus SHALL prove incremental updates, rename and delete handling, multi-language symbol and dependency navigation, conflicting instructions, monorepo scoping, secret exclusion, stale-citation rejection, and bounded retrieval quality on small and large repositories."
+
+[req.42]
+title = "Transactional editing, dependency management, and supervised process execution"
+story = "As the engineering executor, I want complete but bounded file and process capabilities, so that I can implement substantial changes, install what the project needs, and run its toolchain without corrupting user work or escaping the workspace."
+ac_1  = "THE project capability set SHALL support bounded read, create, exact patch, structured patch, rename, copy, delete, directory, archive, and approved binary or media operations with root confinement, symlink defense, expected preimage hashes, size limits, cancellation, and accurate GREEN, YELLOW, or RED classification."
+ac_2  = "A multi-file change SHALL be represented as an ordered patch set with baseline revision, affected spec criteria, before and after hashes, generated-file markers, validation plan, and rollback data; preflight SHALL reject any stale or inapplicable member before mutation, and interrupted application SHALL reconcile to all-before or a fully described recoverable partial."
+ac_3  = "PROCESS execution SHALL support argv-safe one-shot commands and durable PTY sessions with explicit working directory, minimal environment, stdout and stderr streaming, input, resize, signal, cancellation, timeout, process-tree cleanup, output backpressure, secret redaction, and restart-visible terminal state."
+ac_4  = "TOOLCHAIN discovery SHALL identify lockfiles, runtimes, package managers, build systems, and required versions; dependency installation SHALL preserve the repository's chosen manager and lockfile, screen lifecycle scripts and known supply-chain risk, explain material additions, and require approval for policy-defined risky packages or scripts."
+ac_5  = "CONCURRENT agent and human changes SHALL use leases or optimistic revisions at file and patch-set boundaries, surface conflicts as exact diffs, and SHALL never discard, reset, clean, stash, commit, or overwrite pre-existing work without explicit authority."
+ac_6  = "A production-path suite SHALL prove multi-file atomicity, stale preimage rejection, cancellation, daemon crash reconciliation, PTY reconnect, runaway process cleanup, output floods, malicious package scripts, symlink swaps, concurrent human edits, and byte-exact rollback."
+
+[req.43]
+title = "Reversible Git change management and provider collaboration"
+story = "As a user, I want Ion to manage branches, versions, reviews, and repository collaboration while preserving my work, so that autonomous implementation remains inspectable and reversible from first patch through merge."
+ac_1  = "ION SHALL capture a read-only Git baseline before mutation and expose status, history, blame, branches, remotes, staged and unstaged changes, rename detection, and old, new, and diff views without inferring ownership of a dirty path."
+ac_2  = "BRANCH, commit, tag, push, force, history rewrite, merge, and pull-request operations SHALL be separate typed operations with accurate policy classification; commit and remote mutation SHALL occur only under explicit user direction or a previously approved workflow rule and SHALL never include unrelated changes."
+ac_3  = "A change-set review SHALL group files by spec criterion and subsystem, distinguish generated, dependency, migration, test, binary, and secret-risk changes, support file and hunk selection, and preserve review comments as correlated work items."
+ac_4  = "VERSION checkpoints SHALL let the user preview or compare historical code without stranding the active branch, restore code or conversation state through an explicit transaction, and recover to the original branch after interruption or failed checkout."
+ac_5  = "GIT provider adapters SHALL normalize repository and branch discovery, issues, pull or merge requests, inline review threads, checks, statuses, and mergeability across supported providers while using write-only credential references and least-authority grants."
+ac_6  = "A test matrix SHALL prove dirty-tree preservation, partial staging, rename and binary diffs, conflict handling, detached-head and missing-remote recovery, interrupted historical preview, rejected push, provider pagination, stale review threads, and exactly-once approved pull-request creation."
+
+[req.44]
+title = "Application runtime, live preview, diagnostics, and visual feedback"
+story = "As a user, I want every software change to become a visible running result with understandable diagnostics, so that I can steer the product by what it does rather than by reading code or terminal output."
+ac_1  = "THE runtime manager SHALL infer or accept install, build, develop, test, and start commands; allocate collision-free ports; stream phase and readiness state; expose named services through origin-bound preview URLs; and support start, reload, restart, stop, and crash recovery on negotiated workspace hosts."
+ac_2  = "A project preview SHALL provide address and service selection, desktop and mobile viewport presets, refresh and open-external controls, screenshot capture, and safe browser inspection while isolating preview content from the trusted operator origin."
+ac_3  = "CONSOLE, process, build, type, lint, browser, network, and source-map diagnostics SHALL normalize into deduplicated Problems with severity, source, location, causal evidence, recurrence count, and a bounded `Ask Ion to fix` workflow linked to the active spec criterion."
+ac_4  = "THE preview SHALL support DOM and accessibility inspection plus optional element selection, screenshot annotation, and style proposals; visual interaction SHALL produce a reviewable patch proposal and SHALL NOT bypass source control, policy, or verification."
+ac_5  = "SERVICE readiness, hot-reload state, package-manager incompatibility, missing runtime, port conflict, compile failure, and crashed process SHALL be translated into task-first status with one clear next action and progressively disclosed raw logs."
+ac_6  = "A real-browser matrix SHALL build and preview representative static, frontend, API, and full-stack projects; prove reload without chat loss, console and network correlation, mobile and dark-mode inspection, screenshot evidence, crash repair, hostile preview isolation, and cleanup of every owned process and port."
+
+[req.45]
+title = "Continuous verification, independent review, and release gates"
+story = "As a user, I want Ion to prove software behavior continuously and review its own changes critically, so that a polished preview or confident message can never substitute for production evidence."
+ac_1  = "A project verification manifest SHALL derive required format, lint, type, compile, unit, integration, end-to-end, accessibility, security, dependency, license, migration, performance, and packaging gates from the spec and inspected repository, with exact commands, environment, scope, timeout, and evidence retention."
+ac_2  = "ION SHALL run the cheapest relevant checks after each coherent patch set, expand to the complete required gate before delivery, and bind exit status, bounded logs, reports, coverage, screenshots, traces, and artifact hashes to the project revision and covered criteria."
+ac_3  = "FAILURES SHALL be normalized by stable signature, correlated to the inducing patch and prior attempts, and enter a bounded diagnose, patch, rerun loop; unchanged signatures, new regressions, budget exhaustion, flakes, and environmental blockers SHALL stop or escalate honestly."
+ac_4  = "THE review router SHALL require independent correctness, security, data and migration, usability and accessibility, performance, operability, and evidence lenses when their risk signals apply; a reviewer SHALL inspect the actual diff and current evidence and SHALL NOT approve its own unsupported assertions."
+ac_5  = "FLAKY, skipped, quarantined, unavailable, or environment-dependent checks SHALL remain visible and SHALL NOT count as passing; any user-authorized waiver SHALL name its scope, reason, expiry, risk, and uncovered criteria."
+ac_6  = "An acceptance suite SHALL inject compile, test, visual, accessibility, security, migration, performance, flake, timeout, and false-green failures and prove targeted feedback, bounded repair, independent review, waiver expiry, criterion coverage, and refusal to release with an unmet required gate."
+
+[req.46]
+title = "Full-stack resources, environment promotion, and deployment"
+story = "As a user, I want Ion to assemble and deliver complete applications including data and external services, so that I can request a product rather than manually wiring infrastructure after code generation."
+ac_1  = "A typed resource catalog SHALL model databases, object storage, authentication, email, queues, scheduled jobs, analytics, payments, and external APIs through provider-neutral desired state, declared capabilities, environment scope, ownership, cost and data-risk metadata, and explicit adapter boundaries."
+ac_2  = "ENVIRONMENT configuration SHALL use versioned schemas and write-only Vault references with development, test, preview, staging, and production scopes; values SHALL never enter model context, source files, diffs, logs, screenshots, browser storage, or generated deployment manifests."
+ac_3  = "DATABASE work SHALL support schema inspection, migration generation, dry-run or shadow application, destructive-change analysis, test fixtures, branch or isolated test databases where available, ordered promotion, backup and rollback evidence, and RED approval for production mutation."
+ac_4  = "DEPLOYMENT SHALL produce a reviewable plan and immutable build artifact, distinguish preview, staging, and production, require RED approval for public or production effects, use idempotent provider operations, reconcile uncertain outcomes, and return version, URL, health, logs, rollback handle, and cost evidence."
+ac_5  = "ION SHALL create or update CI workflows only through reviewed patches, observe checks and deployment health, correlate failures back into the Work Brief, and support release notes, changelog, versioning, domain and DNS readiness, and rollback without claiming availability from configuration alone."
+ac_6  = "A provider-conformance suite plus one live staging journey SHALL prove resource creation, secret isolation, reversible migrations, preview promotion, failed deploy reconciliation, health and direct-service verification, rollback, cost bounds, and export of source, data, config schema, and artifacts without vendor lock-in."
+
+[req.47]
+title = "Embedded task-first Software Studio for non-technical users and experts"
+story = "As a user, I want Ion to reveal a calm, complete Software Studio when my outcome requires development, so that the same general agent can operate as my expert engineer while I create and supervise a product without turning the overall Ion experience into an IDE or coding assistant."
+ac_1  = "THE studio home SHALL offer one primary `What do you want to build or change?` action plus recent projects, resume state, import, clone, and template paths; setup detours SHALL preserve the original prompt and automatically resume it when ready."
+ac_2  = "A persistent mounted conversation and Work Brief SHALL remain the center of every project while an adaptive workspace provides Plan, Changes, Code, Terminal, Preview, Problems, Tests, Security, Data, and Deploy panels backed by the same generated control-plane state."
+ac_3  = "DEFAULT presentation SHALL describe current outcome, what Ion is doing, visible result, blockers, decisions, verification, and next action in plain language with one obvious primary action per state; file paths, commands, raw logs, costs, and protocol detail SHALL be progressively disclosed."
+ac_4  = "STREAMING engineering events SHALL render as stable structured activity for exploration, edits, commands, tests, reviews, previews, deployments, sub-agents, and recovery; reconnect and route changes SHALL reconcile from durable truth without phantom running work, duplicate activity, or lost approvals."
+ac_5  = "HUMAN intervention SHALL support queue, steer, answer, approve, deny, pause, resume, cancel, retry, revise spec, comment on a plan or diff, select preview elements, restore a version, and take over a terminal or browser without racing the executor or losing its resumable state."
+ac_6  = "THE studio SHALL meet WCAG 2.2 AA, keyboard and screen-reader critical-path operation, reduced motion, localization-safe layout, 390px mobile through wide desktop behavior, and dark and light themes while keeping expert workflows efficient through shortcuts and command discovery."
+ac_7  = "A real-browser acceptance journey SHALL take a first-time user from one plain-language idea through clarified spec, implementation, live preview, guided revision, verified tests, reviewable changes, and staging deployment while an expert journey proves full diff, terminal, Git, diagnostics, and recovery control."
+ac_8  = "THE global Ion home, conversation, memory, relationship, goals, channels, and capability routing SHALL remain field-general; the Software Studio SHALL open contextually or by user choice, use the same identity and durable conversation, and close without losing or replacing non-software work."
+ac_9  = "EVERY visible Studio entry point, including the persistent conversation composer, SHALL carry an explicit structured surface and project scope; if no project exists, a plain-language submission SHALL create and bind an isolated project before any agent mutation. Wrong-order, repeated, queued, retried, resumed, and route-changing interaction SHALL preserve the user's intended scope, while missing or contradictory scope SHALL fail closed before filesystem, process, or Git access."
+
+[req.48]
+title = "Durable autonomous engineering supervisor and specialist swarm"
+story = "As a user, I want the same full-range Ion to operate as an accountable expert engineer for substantial software outcomes across hours and restarts, using specialists when useful without adopting an engineer-only persona, so that I supervise results and decisions instead of micromanaging steps."
+ac_1  = "THE engineering supervisor SHALL compile the accepted spec into a durable dependency DAG, maintain exactly one authoritative current state per work item, dispatch only dependency-ready work, and continue until verified completion, a required decision, an exhausted bound, or an honest blocker."
+ac_2  = "SPECIALIST sub-agents for product discovery, repository exploration, implementation, testing, security, data, frontend quality, performance, operations, and review SHALL receive least-context task packets, reduced authority, exact deliverables, budgets, and evidence obligations and SHALL return structured findings rather than independent completion claims."
+ac_3  = "PARALLEL work SHALL use declared file, service, and environment scopes, conflict-aware leases, bounded fan-out, deterministic merge order, cancellation propagation, and parent reconciliation; specialists SHALL NOT commit, publish, deploy, spend, or communicate externally unless the parent holds specific approved authority."
+ac_4  = "THE supervisor SHALL persist queue, attempt, patch, process, verification, approval, budget, and artifact state; after crash or daemon restart it SHALL reconcile filesystem, Git, processes, providers, and event history before retrying any effect."
+ac_5  = "AUTONOMY budgets SHALL cover tokens, model cost, tool calls, wall time, processes, storage, network, provider spend, retries, and parallel agents with per-project and per-outcome ceilings, live projection, graceful pause, and no safety or evidence exception at exhaustion."
+ac_6  = "A fault-injection journey SHALL prove multi-agent exploration and implementation, conflicting edits, child failure, parent restart, duplicate completion, uncertain external effect, user steering, cancellation, budget exhaustion, and final criterion-by-criterion synthesis without orphan work or fabricated progress."
+
+[req.49]
+title = "Engineering intake, repository automations, and continuous maintenance"
+story = "As a user, I want Ion to accept work from the tools around my projects and handle recurring maintenance safely, so that the same accountable engineer can respond to issues, reviews, failing checks, schedules, and operational signals."
+ac_1  = "CONNECTORS SHALL normalize authorized issues, pull-request reviews, CI failures, dependency alerts, error reports, schedules, webhooks, and supported chat requests into untrusted intake records with source, actor, repository, revision, permissions, deduplication key, and delivery target."
+ac_2  = "AN intake record SHALL become executable only after routing to an existing project and outcome contract or creation of a reviewable spec proposal; instructions embedded in code, issue text, logs, web pages, comments, or artifacts SHALL remain data and SHALL NOT override policy or authority."
+ac_3  = "CURATED recipes SHALL cover issue implementation, failing-check repair, unresolved-review response, dependency update, vulnerability remediation, release preparation, documentation drift, flaky-test investigation, and incident follow-up using the same spec, patch, evidence, approval, and artifact boundaries as interactive work."
+ac_4  = "AUTOMATIONS SHALL use isolated branches or workspaces, bounded schedules and concurrency, delivery deduplication, cooldowns, poison-item handling, and exactly-once approved external updates; they SHALL never modify the default branch or production environment directly."
+ac_5  = "STATUS updates back to a source SHALL distinguish accepted, planning, working, awaiting decision, blocked, verification failed, ready for review, delivered, and superseded and SHALL include concise evidence links without leaking secrets, private reasoning, or unrelated workspace data."
+ac_6  = "An integration matrix SHALL prove replayed webhooks, stale revisions, malicious issue text, duplicated schedules, provider outage, rate limits, closed or transferred issues, force-updated branches, review-thread resolution, CI reruns, and exactly-once draft change delivery."
+
+[req.50]
+title = "Evidence-calibrated professional capability system for full-range agency"
+story = "As a user, I want one general Ion to become a dependable specialist in any field my work requires, with software engineering as one flagship expertise rather than his defining category, so that professional breadth can expand without pretending that a model already masters every possible domain."
+ac_1  = "A versioned Expert Pack SHALL declare domain ontology, applicable tasks, required sources, methods, tools, workflows, safety constraints, jurisdiction or version scope, freshness policy, output schemas, verification, benchmark cases, and known limits and SHALL compose through the existing skill, plugin, MCP, memory, and policy systems."
+ac_2  = "CAPABILITY routing SHALL use task and risk signals plus current tool readiness, source freshness, and benchmark evidence; Ion SHALL state uncertainty, request specialist or human review when required, and SHALL NOT claim mastery or completion from pack presence alone."
+ac_3  = "RESEARCH performed for a domain task SHALL distinguish authoritative evidence, observed implementation, inference, assumption, and unverified behavior; time-sensitive or high-stakes facts SHALL require current primary sources and citations before they can support consequential action."
+ac_4  = "A candidate pack learned from completed work SHALL preserve provenance, redact private data, pass adversarial and regression evaluation, receive required human review, and be versioned with rollback before activation; later failures SHALL reduce its capability confidence and trigger refinement or quarantine."
+ac_5  = "HIGH-STAKES medical, legal, financial, safety, security, and regulated workflows SHALL declare jurisdiction and role boundaries, require qualified-human gates where appropriate, forbid unsupported diagnosis or authority, and retain immutable evidence and decision audit."
+ac_6  = "A domain evaluation harness SHALL measure correctness, calibration, source quality, tool use, policy compliance, reproducibility, and transfer across representative software, research, operations, data, design, writing, and regulated scenarios; only passed, current evaluations SHALL appear in the self-model as demonstrated capability."
+ac_7  = "USERS SHALL be able to inspect why a pack was selected, its sources, version, permissions, evaluation evidence, limits, and data use and SHALL be able to disable, pin, replace, or remove it without corrupting project history."
+
+[req.51]
+title = "Embedded Software Studio production acceptance and anti-performance gate"
+story = "As a user, I want evidence that the full-range Ion can repeatedly enter his embedded Software Studio and take real software from intent to a running, reviewable delivery, so that expert engineering is proven as one complete capability without redefining the whole agent as a software product."
+ac_1  = "A clean-install journey SHALL accept one plain-language product request, create or import the project, produce and accept the spec, implement it, run and preview it, diagnose and repair injected defects, verify every criterion, present the complete change set, and deploy to an isolated staging target through production binaries and services."
+ac_2  = "THE acceptance portfolio SHALL include at least TypeScript frontend, full-stack web, Go service, Python service or data workflow, and Rust or systems project fixtures plus a brownfield monorepo, each with accessibility, security, failure, migration, restart, and rollback cases appropriate to its stack."
+ac_3  = "THE same project SHALL survive browser and TUI switching, client reconnect, daemon restart, workspace-host restart, provider fallback, long-running pause and resume, concurrent human edits, and history restore with exact spec, Git, process, approval, budget, and evidence reconciliation."
+ac_4  = "ADVERSARIAL acceptance SHALL cover prompt injection in repositories and issue text, malicious dependencies, secret bait, path and symlink attacks, hostile previews, command and output floods, network egress, cross-project and cross-actor access, stale operations, duplicated events, and unapproved deploy or publication."
+ac_5  = "PUBLISHED performance and reliability gates SHALL bound workspace provisioning, index freshness, command stream latency, preview readiness, reconnect replay, memory growth, cancellation, orphan cleanup, and multi-hour operation under declared reference hardware and concurrency."
+ac_6  = "NO Software Studio phase or related umbrella SHALL be marked done until current live evidence proves the production composition and restart path, every required criterion has durable artifact coverage, unresolved boundaries are visible, the field-general Ion experience remains intact, and the user can export the project and continue without Ion."
+
+[req.52]
+title = "Provider-compatible, misuse-tolerant, evidence-convergent task execution"
+story = "As a human delegating substantial work, I want Ion to absorb provider dialect drift, ordinary operator mistakes, and temporary stalls while preserving exact progress, so that recoverable implementation details do not kill my task or leave a false running state."
+ac_1  = "A first-class MiMo provider profile SHALL select MiMo for configured Xiaomi or MiMo models, preserve provider-internal reasoning only inside bounded provider request state, apply agentic sampling, normalize native and MiMo textual calls from content or reasoning, buffer tool-bearing streams until safe normalization, emit no raw provider reasoning to any client, prevent internal compatibility or revision fallback instructions and outputs from entering transcript history or the user stream, and retain schema and policy validation before execution."
+ac_2  = "BEFORE the first tool-bearing task on a provider profile, Ion SHALL run a harmless multi-turn tool-call canary, record a secret-free capability mode, and select native-buffered, textual-buffered, compatibility, or an available fallback without mutating the user workspace."
+ac_3  = "WORKSPACE tools SHALL safely create missing file parents, accept absolute paths only when contained by the registered root, translate leading change-directory intent into a bounded working directory, and return structured corrective results for unavailable executables without weakening traversal or symlink isolation."
+ac_4  = "AN accepted outcome SHALL persist criterion-linked dependency work items with one authoritative pending, ready, running, verifying, blocked, or completed state; verified artifacts SHALL advance covered items and unlock only dependency-ready work across turn and daemon replacement."
+ac_5  = "A recovery retry SHALL change a material execution strategy such as parser, buffering, prompt mode, context, tool surface, credential, or provider; prediction mismatch state SHALL be keyed to the exact normalized action and scoped to the current turn; and the runtime SHALL detect exhausted strategies instead of repeating an identical request as recovery or allowing unrelated prior actions to force revision."
+ac_6  = "A bounded no-activity watchdog SHALL emit truthful recovery state, cancel the stalled attempt, and start a fresh continuation from the durable checkpoint; browser and TUI reducers SHALL distinguish running, recovering, incomplete, failed, interrupted, and completed states without phantom work."
+ac_7  = "AN ordinary model final SHALL NOT end a turn when it exposes internal control flow, refers to an undelivered earlier answer, omits the subject of the original request, or ends research without substantive cited evidence or an explicit evidence limitation; an active outcome contract additionally SHALL require server-verified criterion coverage and evidence-bound completion, or a real authority, safety, decision, cancellation, or exhausted-budget boundary."
+ac_8  = "A production-path fault suite SHALL prove MiMo native and textual calls, multi-turn preflight, malformed-call strategy change, exact-action turn-scoped mismatch isolation, typed revision continuation with no transcript poisoning, zero raw-reasoning client events, rejection and repair of a MatrixMCL-style false final, nested and wrong-form path recovery, encrypted work-item restart, watchdog continuation, truthful terminal UI restoration, and refusal of premature completion."
+
+[req.53]
+title = "Canonical tool-lifecycle events for the Ion Computer"
+story = "As a user watching Ion work, I want every real tool interaction to drive a durable visual event, so that the computer shows what the agent is actually doing instead of inventing a theatrical activity stream."
+ac_1  = "EVERY model-visible operation executed through the shared production tool manager SHALL emit a canonical lifecycle of requested, awaiting_approval when applicable, started, bounded progress when available, and exactly one completed, failed, denied, interrupted, or outcome_unknown terminal event; the tool call SHALL trigger the activity and the real tool response SHALL be the content source."
+ac_2  = "EACH ComputerEvent SHALL carry a protocol version, event ID, durable sequence, actor, session, turn, task or outcome, agent, tool-call, tool and operation identifiers, scope, risk class, phase, timestamp, display-kind hint, bounded source references, and terminal status without exposing private reasoning or secret values."
+ac_3  = "COMPUTER events SHALL reference the authoritative ToolEvent, approval, artifact, process, browser, project, or evidence record and SHALL NOT create a second execution or completion truth."
+ac_4  = "STREAMING tools MAY emit coalesced progress and content deltas subject to per-tool size, rate, retention, and backpressure bounds; slow or disconnected clients SHALL NOT block execution or force unbounded server or browser memory."
+ac_5  = "RECONNECT, client refresh, route change, daemon restart, duplicate delivery, retention gaps, and out-of-order parallel completion SHALL reconstruct one deterministic scoped activity history and current computer state using replay or an explicit snapshot-plus-gap boundary."
+ac_6  = "A production-path test SHALL prove lifecycle correlation for success, approval, denial, streaming, failure, interruption, uncertain outcome, duplicate replay, restart, and concurrent agents without phantom activity or false completion."
+
+[req.54]
+title = "Validated semantic display models derived from tool responses"
+story = "As a user, I want Ion to turn raw tool responses into clear native views, so that I can understand the agent's working state without reading protocol payloads, terminal noise, screenshots, or copied website chrome."
+ac_1  = "A versioned adapter registry SHALL map supported tool calls and responses into generated, runtime-validated display models; structured response fields SHALL be preferred over model-authored extraction and unsupported tools SHALL fall back to an honest generic action and result view."
+ac_2  = "ADAPTERS SHALL be deterministic for URLs, queries, repository paths, files, code ranges, commands, exit state, process state, tables, document structure, artifacts, citations, and other structured fields; model-produced summaries MAY supplement but SHALL NOT replace or contradict source data."
+ac_3  = "EVERY displayed datum SHALL be classified as observed, generated, summarized, inferred, or unavailable and SHALL retain a bounded reference to the corresponding source event, result, artifact, URL, revision, or command output."
+ac_4  = "DISPLAY models SHALL use a small reusable vocabulary for search results, reader content, navigation trees, code, terminal output, diffs, processes, tables, charts, documents, artifacts, tasks, agents, approvals, errors, and empty or degraded states rather than reproducing each external product pixel-for-pixel."
+ac_5  = "RAW tool payloads, arbitrary HTML, scripts, styles, terminal control sequences, data URLs, and unvalidated media SHALL NOT enter the application DOM; text, links, media, code, and structured values SHALL pass schema validation, normalization, sanitization, redaction, and explicit size limits first."
+ac_6  = "ADAPTER and display-schema evolution SHALL preserve replay of retained events through versioned migration or an explicit unsupported-version view and SHALL never silently reinterpret historical evidence."
+ac_7  = "A contract suite SHALL prove exact extraction, truth classification, evidence linkage, fallback behavior, malformed and oversized result handling, schema migration, and stable rendering for every registered display model."
+
+[req.55]
+title = "Live, inspectable, and replayable Ion Computer experience"
+story = "As a user, I want to watch my agent work inside a calm Ion-native computer, so that substantial delegated work feels visible and understandable without becoming a fake remote desktop."
+ac_1  = "THE web experience SHALL provide a resizable split between persistent conversation or task activity and a Ion Computer stage, with an accessible full-screen mode and adaptive behavior from 390px mobile through wide desktop."
+ac_2  = "THE computer header SHALL continuously show the bound task or outcome, current agent, active Ion application, plain-language action, running, awaiting decision, recovering, blocked, failed, interrupted, or completed state, and the latest durable event time."
+ac_3  = "FOLLOW LIVE SHALL be the default; users SHALL be able to pause following, inspect an earlier event or artifact, scrub or navigate the durable timeline, and use Back to live without changing the agent's execution state or losing their inspection position."
+ac_4  = "WATCH state and USER EXPLORE state SHALL remain distinct. Inspecting a result SHALL be read-only, while steering, retrying, taking over, approving, denying, pausing, resuming, cancelling, or requesting another action SHALL use explicit production commands and existing policy boundaries."
+ac_5  = "MOTION SHALL only communicate a real state transition. Ion SHALL NOT fabricate cursor movement, clicks, typing, tool usage, progress, or completion; reduced-motion mode SHALL preserve all information without animation."
+ac_6  = "THE experience SHALL meet WCAG 2.2 AA, keyboard and screen-reader critical paths, localization-safe layout, bounded virtualization for long histories, dark and light themes, and comprehensible loading, empty, degraded, gap, and failure states."
+ac_7  = "THE TUI SHALL expose the same ordered action, status, truth class, source, approval, artifact, and replay semantics in a terminal-appropriate form without pretending to reproduce the graphical computer."
+ac_8  = "Real-client tests SHALL prove resizing, full screen, Follow live, historical inspection, Back to live, explicit steering, reconnect, refresh, route changes, mobile, keyboard, screen reader, reduced motion, and long-event virtualization."
+
+[req.56]
+title = "Ion-native application renderers for agent work"
+story = "As a user, I want the computer to select an understandable application for each kind of work, so that web research, code, commands, data, and deliverables share one coherent Ion visual language."
+ac_1  = "A Research Browser SHALL render search query and results, opened URL, title, source, extracted navigation, headings, readable content, links, citations, media references, and browse state from real search and browser responses without depending on third-party iframe permission."
+ac_2  = "A Repository and Code application SHALL render provider or workspace identity, revision, branch, path tree, selected file, language, bounded code ranges, matches, commits, diffs, and diagnostics from repository, browser, project, Git, and file-tool results."
+ac_3  = "A Terminal and Process application SHALL render working directory, redacted command, bounded streaming output, exit status, duration, process and service state, retries, cancellation, and related artifacts while neutralizing control sequences and secret material."
+ac_4  = "Document, Artifact, and Data applications SHALL render generated or inspected documents, tables, charts, reports, images, presentations, and downloadable artifacts from validated structures with provenance, version, completion, and verification state."
+ac_5  = "A Task and Agent application SHALL render the authoritative outcome, work items, current and historical agent assignments, bounded parallel activity, blockers, decisions, evidence, produced artifacts, and completion coverage without exposing private chain of thought."
+ac_6  = "SEMANTIC rendering SHALL be the default. A sanitized screenshot or visual snapshot MAY be shown on demand when appearance is itself relevant or semantic extraction is insufficient, and SHALL be labeled as captured evidence rather than used as the primary second-by-second transport."
+ac_7  = "RENDERERS SHALL register by generated display-kind contract, share the Ion design system and generic primitives, and degrade to the generic evidence view when a specialized application is absent or incompatible."
+ac_8  = "A renderer matrix SHALL prove real search, article, GitHub or GitLab repository, local workspace, code, terminal, process, diff, document, tabular data, artifact, error, screenshot fallback, and unsupported-tool journeys."
+ac_9  = "Public-web research that does not require direct page interaction SHALL start with Tavily structured search when configured, automatically fall back to the configured SearXNG JSON service when Tavily is unavailable or empty, return bounded ranked source metadata and a source-backed overview to the Ion-native Research application, and reserve semantic fetch, native Chromium/CDP, or graphical computer interaction for selected source text, authentication, JavaScript-only interaction, navigation, downloads, visual inspection, or work earlier layers cannot complete."
+
+[req.57]
+title = "Parallel-agent workspaces and causally explicit human interaction"
+story = "As a user supervising substantial work, I want to see what each active agent is doing and interact without racing execution, so that parallelism remains understandable and under my control."
+ac_1  = "EACH parent and sub-agent SHALL have a stable scoped workspace identity, assignment, current application and action, status, recent evidence, budget state, and produced artifacts derived from authoritative task and tool events."
+ac_2  = "THE computer SHALL provide an aggregate workspace plus selection of one agent at a time, visibly distinguish foreground inspection from background execution, and preserve independent Follow live positions when switching agents."
+ac_3  = "PARALLEL events SHALL remain causally ordered per agent and correlated to parent work items; aggregate presentation SHALL NOT imply an order that conflicts with durable timestamps, sequence boundaries, dependencies, or completion evidence."
+ac_4  = "USER steering SHALL target an explicit task, agent, tool action, or artifact revision, reconcile against current execution state, and reject stale, contradictory, cross-scope, or unauthorized commands rather than applying them to whichever window is visible."
+ac_5  = "TAKEOVER of a terminal or browser SHALL acquire an explicit lease, pause or coordinate the owning executor, display authority and expiry, and return control through reconciliation without lost input, duplicated effects, or hidden continued automation."
+ac_6  = "A concurrency journey SHALL prove parent and specialist activity, simultaneous tool calls, agent switching, historical inspection, stale steering rejection, approval routing, cancellation propagation, takeover lease recovery, child failure, parent restart, and criterion-bound synthesis."
+
+[req.58]
+title = "Security, privacy, performance, and attribution boundaries for the Ion Computer"
+story = "As a user, I want the computer view to remain safe and honest while displaying external content and sensitive work, so that visibility does not create a new exfiltration, injection, or authority path."
+ac_1  = "ALL tool-response content SHALL be treated as untrusted data. Rendering SHALL use inert components with safe URL and media policies, origin isolation where applicable, no script execution, no raw event-handler or stylesheet injection, and no instructions from displayed content entering policy or authority."
+ac_2  = "COMPUTER events, display models, replay, screenshots, caches, exports, and share links SHALL enforce actor, session, project, workspace, agent, and artifact scope using server-side authorization on every fetch rather than client-side hiding."
+ac_3  = "SECRET values, credentials, cookies, tokens, private form fields, sensitive mailbox material, protected file content, and policy-redacted output SHALL be removed before client delivery; the visual event stream SHALL carry write-only references or redacted facts only."
+ac_4  = "APPROVAL and consequence surfaces SHALL identify the real pending operation, target, data movement, external effect, and scope; the visualization SHALL NOT make an unexecuted proposal appear completed or bypass the shared policy manager."
+ac_5  = "THE service SHALL publish and enforce event, delta, payload, retained-history, screenshot, memory, CPU, render-latency, reconnect, and slow-client budgets with bounded coalescing, truncation markers, snapshot fallback, and lossless preservation of terminal status and evidence references."
+ac_6  = "EXTERNAL material SHALL retain source name, URL or provider identity, capture time, revision when available, and observed, generated, summarized, or inferred classification; Ion-native presentation SHALL NOT imply that it is the original external interface."
+ac_7  = "An adversarial suite SHALL prove prompt-injection containment, malicious markup and media rejection, terminal escape neutralization, secret and cross-scope non-disclosure, stale authorization denial, event-flood backpressure, forged event rejection, safe screenshots, and accurate attribution."
+
+[req.59]
+title = "Ion Computer production acceptance and anti-theater gate"
+story = "As a user, I want proof that the computer reflects real agent work across tools and restarts, so that the experience is useful operational visibility rather than a polished animation disconnected from execution."
+ac_1  = "A production GitHub-repository analysis journey SHALL begin from one user request and visibly progress through real search, browsing, repository navigation, code inspection, bounded command or analysis execution, parallel-agent activity when selected, artifact creation, and final report review using actual tool calls and responses."
+ac_2  = "EVERY visible application transition, item, status, error, artifact, and completion claim in the journey SHALL correlate to durable production events and evidence; fixtures, manually injected frontend payloads, disconnected mocks, screenshot-only proof, HTTP success, or SPA fallback SHALL NOT satisfy acceptance."
+ac_3  = "THE journey SHALL survive browser refresh, route change, network interruption, client reconnect, daemon restart, retained-history snapshot fallback, duplicated delivery, parallel out-of-order completion, agent failure, user inspection of history, and Back to live with exact current state."
+ac_4  = "ACCEPTANCE SHALL cover real search and reader pages, GitHub or GitLab, local workspace and Git state, terminal and process output, documents and tabular artifacts, approvals, denial, incomplete and uncertain outcomes, unsupported tools, screenshot fallback, mobile, keyboard, screen reader, and reduced motion."
+ac_5  = "PUBLISHED reference-hardware results SHALL prove bounded event-to-projection latency, animation and scroll responsiveness, reconnect and replay time, browser memory, server memory, payload volume, long-run stability, event-flood behavior, and no tool-execution slowdown caused by disconnected or slow viewers."
+ac_6  = "NO Phase 14 task or umbrella SHALL be marked done until current production binaries and real clients prove criterion-linked artifacts, restart recovery, security and accessibility boundaries, truthful degraded behavior, and zero visual activity without a corresponding authoritative event."
+ac_7  = "THE Ion Computer SHALL remain a contextual projection of the same field-general Ion identity, memory, relationship, policy, goals, approvals, and execution continuity across research, software, data, documents, communications, and future domains; it SHALL NOT create a separate computer-agent identity or restrict the product to software work."
+
+[req.60]
+title = "Agent-scoped durable scheduling and wake-up"
+story = "As a user, I want each Ion identity to schedule future and recurring work in its own encrypted scope, so that reminders and autonomous continuation survive restarts without depending on one central scheduler."
+ac_1  = "THE scheduler SHALL support one-time delay, absolute RFC3339 time, standard five-field cron, descriptors, recurring intervals, and IANA time zones with bounded validated inputs and exact next-fire projections."
+ac_2  = "EVERY alarm SHALL be scoped to an authenticated actor and owning session, stored encrypted with its wake message and payload, isolated from every other actor, and deduplicated by an owner-scoped idempotency key."
+ac_3  = "DUE alarms SHALL be durably claimed before delivery and SHALL inject a normal production turn through the authenticated control plane using an occurrence-stable idempotency key so restart or retry cannot create duplicate turns."
+ac_4  = "FAILED delivery SHALL use bounded exponential retry, retain a safe error and attempt count, terminally fail exhausted one-time alarms, and skip-and-advance recurring alarms without wedging the series."
+ac_5  = "THE agent SHALL receive direct create, list, inspect, and cancel schedule tools through the shared tool manager; consequential wake execution SHALL retain normal policy, approval, memory, tool, event, and evidence boundaries."
+ac_6  = "THE operator projection SHALL show owner-safe label, kind, status, next fire, last fire, failures, and last safe error, and SHALL distinguish the existing internal presence schedules from user or agent-created alarms."
+ac_7  = "A production-path suite SHALL prove time zones, once and cron calculation, actor isolation, idempotent creation, due claim, exact-once wake turn, cancellation, bounded retry, recurring skip-and-advance, daemon restart recovery, encrypted-at-rest content, and honest unavailable or degraded state."
+
+[req.61]
+title = "Versioned Private Computer execution-host contract"
+story = "As Ion's execution runtime, I want one policy-bound contract for private graphical computers, so that Personal and Clean Linux sessions remain part of the same identity, task, tool, and evidence system across local and hosted infrastructure."
+ac_1  = "THE Private Computer boundary SHALL define versioned host, session, capability, lifecycle-operation, lifecycle-state, authority, resource-budget, persistence, and compatibility contracts without creating a second agent, task, policy, audit, artifact, or completion truth."
+ac_2  = "EVERY privileged host request SHALL bind installation, actor, Ion session, task or outcome, agent, computer session, operation, resource, authority revision, expiry, idempotency key, and replay protection and SHALL fail closed on missing, stale, cross-scope, expired, unsupported, or contradictory values."
+ac_3  = "THE host contract SHALL support provision, start, stop, suspend, resume, rebuild, destroy, inspect, and reconcile plus browser, terminal, filesystem, screenshot, pointer, keyboard, clipboard, desktop-stream, protected-secret-entry, and approved-application capabilities with explicit unavailable and degraded reasons."
+ac_4  = "ION SHALL select execution in the order native structured API or tool, Tavily structured search with bounded SearXNG fallback, semantic fetch or reader extraction, native Chromium/CDP, then graphical computer interaction only when earlier layers are insufficient, direct interaction is required, or the operator explicitly enters the computer."
+ac_5  = "EVERY host transition and computer action SHALL correlate to canonical ComputerEvents, authoritative ToolEvents, policy decisions, leases, artifacts, and evidence records; desktop video and screenshots SHALL remain views and SHALL NOT prove execution or completion."
+ac_6  = "HOST negotiation and reconciliation SHALL preserve explicit stopped, unavailable, provisioning, ready, active, needs-help, disconnected, recovering, failed, and destroyed states across control-plane and host restart, including version incompatibility and orphan detection."
+ac_7  = "A contract suite SHALL prove strict validation, capability negotiation, lifecycle transition legality, idempotent replay, stale-revision rejection, cross-actor and cross-mode isolation, bounded serialization, restart reconciliation, and absence of a second completion truth."
+
+[req.62]
+title = "Actor-scoped Personal and disposable Clean Computer modes"
+story = "As an operator, I want a persistent private computer and a clean disposable computer, so that trusted ongoing work can retain explicitly permitted state while risky work starts without prior cookies, files, or account state."
+ac_1  = "A Personal Computer SHALL use an actor-and-installation-scoped home and workspace volume, retain only explicitly installed applications and approved preferences, and never be mounted or addressable by another actor."
+ac_2  = "A Clean Computer SHALL begin from a version-pinned image and fresh cryptographic and filesystem scope with no Personal cookies, credentials, files, clipboard, account state, package changes, or cache mounted or copied into it."
+ac_3  = "CLEAN completion SHALL export verified produced artifacts through Ion's authoritative artifact path before destroy or cryptographic abandonment and SHALL record cleanup evidence; missing export or cleanup evidence SHALL leave the task incomplete or outcome-unknown."
+ac_4  = "PERSONAL storage controls SHALL include inspect, usage, backup, restore, rebuild, revoke, and clear operations, each policy-routed with explicit consequence, while Clean mode SHALL expose its destruction deadline and retained artifact receipts."
+ac_5  = "RECONCILIATION SHALL detect stopped, unavailable, recovering, orphaned, expired, partially destroyed, and ready environments without reusing stale authority or duplicating actions after either service restarts."
+ac_6  = "CPU, memory, process, storage, network-egress, idle-time, session-duration, screenshot, clipboard, and cost budgets SHALL be declared per mode and enforced independently of provider token budgets."
+ac_7  = "A real-host suite SHALL prove Personal restart retention, Clean freshness and destruction, artifact-before-cleanup gating, orphan recovery, storage exhaustion behavior, budget enforcement, and no cross-actor or cross-mode state leakage."
+
+[req.63]
+title = "Live private desktop view and coordinated operator takeover"
+story = "As an operator, I want to watch and temporarily control Ion's real desktop inside the existing Ion Computer, so that I can resolve graphical boundaries without hidden automation, secret leakage, or a separate remote-desktop product."
+ac_1  = "THE existing Ion Computer shell SHALL render a real private_desktop application from an authenticated desktop stream isolated from the trusted operator DOM while preserving the persistent conversation, evidence rail, timeline, Follow live, history, full-screen, responsive, and accessibility behaviors."
+ac_2  = "VIEW and INPUT authority SHALL use separate short-lived actor-, installation-, session-, task-, resource-, revision-, and origin-scoped tickets; the raw computer daemon SHALL never be publicly addressable and private networking alone SHALL NOT satisfy authentication."
+ac_3  = "PAUSE, Take control, Renew, Return control, Stop, and Rebuild SHALL route through production commands, policy, idempotency, audit, and the existing lease service; input SHALL require the exact live takeover lease and a stale or lost lease SHALL reconcile before either executor acts."
+ac_4  = "WHILE the operator owns control, the executor SHALL be paused or coordinated at an explicit action boundary with no hidden pointer, keyboard, clipboard, or application automation; returning control SHALL reconcile screen, application, task, and authority state before resumption."
+ac_5  = "THE view SHALL show Personal or Clean mode and Ion has control, You have control, or Control reconciling plus honest provisioning, ready, active, needs-help, disconnected, recovering, stopped, failed, and unavailable states without fabricated cursor, typing, progress, or completion."
+ac_6  = "PROTECTED secret entry SHALL suspend or redact screenshots, clipboard capture, event content, logs, and model-visible observations while recording only a bounded redacted fact and SHALL require explicit exit before automation resumes."
+ac_7  = "STREAM transport SHALL be bounded, reconnectable, and replaceable without changing semantic truth; public Railway WebSocket sessions SHALL reconnect before the platform request-duration ceiling and SHALL recover from duplicate frames, route changes, control-plane restart, and computer-service restart."
+ac_8  = "A real-client journey SHALL prove authenticated viewing, mobile and keyboard use, needs-help takeover, one operator interaction, lease renewal and expiry, no concurrent executor input, protected secret entry, return-control reconciliation, reconnect, restart, and semantic-event continuity."
+
+[req.64]
+title = "Railway one-click Private Computer deployment"
+story = "As a new operator, I want to deploy Ion and its private computer in one Railway template, so that onboarding reaches a truthful ready or unavailable state without exposing the computer daemon or locking my data to Railway."
+ac_1  = "THE release SHALL provide reproducible version-pinned Ion and ion-computer images and a multi-service Railway template with only Ion publicly exposed; ion-computer SHALL use authenticated private service networking and an optional HNSW sidecar SHALL exist only when enabled."
+ac_2  = "THE Ion data and optional Personal workspace volumes SHALL have explicit mount paths, ownership repair for non-root processes, schemas, migrations, capacity checks, backup and restore instructions, export format, and documented redeploy downtime; volume-dependent migration SHALL run at service start because Railway does not mount volumes during build or pre-deploy."
+ac_3  = "TEMPLATE variables SHALL use generated or sealed write-only secrets and service references for private host and port values; provider keys, installation keys, session credentials, and desktop tickets SHALL never enter client bundles, template defaults, logs, diagnostics, or model context."
+ac_4  = "ION and ion-computer SHALL expose distinct liveness, readiness, compatibility, and migration state; deployment health checks SHALL gate activation while continuous application monitoring and reconciliation SHALL detect later failure."
+ac_5  = "PUBLIC streaming SHALL support Railway HTTP/1.1 WebSockets with bounded frames, exponential-backoff reconnect before the current request-duration ceiling, replay cursors, and origin checks; the private channel SHALL bind dual-stack and use the service's railway.internal DNS name and explicit port."
+ac_6  = "RESTART, rollback, and image incompatibility SHALL preserve authoritative encrypted state, prevent two writers from sharing one volume, reconcile in-flight sessions and leases, and surface unavailable rather than silently starting an incompatible or unauthenticated desktop."
+ac_7  = "ONBOARDING SHALL present declared CPU, memory, storage, egress, idle, and cost projections before persistent compute is enabled, SHALL distinguish serverless sleep from stopped or failed, and SHALL reach Computer ready or a specific unavailable reason."
+ac_8  = "THE deployment SHALL support documented export and migration to ordinary container infrastructure without Railway-only state formats, privileged mode, a public control port, or an unauthenticated fallback."
+
+[req.65]
+title = "Private Computer security, cleanup, and production acceptance"
+story = "As an operator trusting Ion with a computer, I want adversarial proof of containment, recovery, cleanup, and honest completion, so that graphical fallback does not bypass the security and evidence guarantees of native execution."
+ac_1  = "THE computer service SHALL run as a non-root user without privileged mode, drop unnecessary Linux capabilities, use a read-only base filesystem plus scoped writable mounts, bound processes and shared memory, and fail unavailable when required unprivileged desktop primitives are absent."
+ac_2  = "DESKTOP APIs SHALL be mutually authenticated, rate-limited, replay-resistant, origin-bound where public, and authorized per installation, actor, Ion session, task, computer session, resource, authority revision, and operation on every request."
+ac_3  = "NETWORK policy SHALL default to bounded egress and SHALL preserve destination safety, download quarantine, prompt-injection containment, policy approval, audit, and data-export controls for browser, terminal, filesystem, clipboard, applications, and installed software."
+ac_4  = "PASSWORDS, provider keys, cookies, TOTP values, mailbox secrets, private clipboard data, protected terminal output, and sensitive screen regions SHALL be redacted or excluded from events, screenshots, logs, caches, diagnostics, model context, and artifacts unless an explicitly authorized encrypted artifact requires them."
+ac_5  = "ADVERSARIAL tests SHALL cover hostile pages and downloads, malicious clipboard and terminal content, cross-actor and cross-mode access, stale and replayed tickets, lost leases, reconnect storms, orphaned processes, resource exhaustion, storage failure, partial cleanup, incompatible versions, and control-plane and host restart."
+ac_6  = "A production deployment journey SHALL prove SearXNG-first research, semantic or Chromium escalation, a real graphical boundary, authenticated live desktop, needs-help takeover, operator interaction, duplicate-safe resume, artifact creation and verification, service restarts, Personal retention, and Clean destruction after artifact export."
+ac_7  = "REFERENCE results SHALL publish image provenance, declared hardware and Railway plan, startup and readiness time, frame and input latency, reconnect and replay time, CPU, memory, storage, egress, long-run stability, cleanup duration, and failure behavior."
+ac_8  = "NO Private Computer task or umbrella SHALL be marked done from code presence, simulated payloads, screenshots, HTTP 200, video, or model claims; current production binaries and clients SHALL provide criterion-linked authoritative evidence, and unresolved platform capability or deployment boundaries SHALL remain visible."
+
+[req.66]
+title = "Secure durable image and video generation studio"
+story = "As an operator, I want a first-class media studio inside Ion, so that I can generate and edit images and videos through domain-specific providers without exposing credentials or losing work when a browser or daemon restarts."
+ac_1  = "THE mounted Media Studio SHALL provide text-to-image, image-to-image, text-to-video, image-to-video, inpainting, cleanup, background removal and replacement, text removal, face merge, and upscaling workflows with mode-specific validated controls, accessible previews, honest status, history, and downloads."
+ac_2  = "PROVIDER credentials SHALL remain server-side and SHALL enter neither browser bundles, control-plane payloads, logs, diagnostics, model context, nor persisted job metadata; browser mutations SHALL require the authenticated actor, exact origin, and CSRF proof."
+ac_3  = "PROMPTS, negative prompts, uploaded source images, masks, and face references SHALL be encrypted at rest; jobs, provider task IDs, progress, safe failures, and locally owned output assets SHALL survive browser refresh and daemon restart with actor isolation on every list, inspect, asset, and delete request."
+ac_4  = "ASYNC provider execution SHALL durably record submission before polling, reconcile in-flight provider task IDs after restart, bound time, retries, payloads, output count, and output bytes, and report failure or unknown outcome honestly without duplicate paid generation."
+ac_5  = "REMOTE provider and output retrieval SHALL require TLS, block private and special-use destinations across redirects and DNS resolution, bound response bodies, verify supported image or video media types, and copy expiring provider outputs into Ion-owned storage before success is projected."
+ac_6  = "THE initial provider adapter SHALL implement the Novita V3 contracts supplied in temp/novita_api_examples while keeping provider base URL, client, models, and workflow mapping replaceable for future domain-specific media adapters."
+ac_7  = "A production-path suite SHALL prove authentication, CSRF, actor isolation, encrypted inputs, validation, synchronous edit output, asynchronous generation and polling, restart recovery, provider rejection and timeout, SSRF denial, output bounds, durable playback and download, responsive accessibility, and honest unconfigured state."
+
+[req.67]
+title = "Deployment username and password authentication"
+story = "As the owner of a deployed Ion instance, I want to configure its operator username and password through deployment variables, so that the dashboard and every operator API remain private on Railway and ordinary container hosts."
+ac_1  = "ION SHALL accept exactly one deployment username plus either a deployment password or an Argon2id PHC password hash, validate complete configuration at startup, keep credential material server-side, and never expose it through browser assets, API responses, logs, diagnostics, model context, or durable state."
+ac_2  = "PASSWORD verification SHALL use Argon2id with a unique random salt for plaintext deployment input, constant-time comparison, bounded input sizes, a generic rejection response, and a bounded login-attempt limiter that does not reveal whether the username or password was wrong."
+ac_3  = "THE browser SHALL provide an accessible first-party login experience plus authenticated status and logout, and successful login SHALL issue short-lived signed Secure HttpOnly SameSite=Strict session cookies with a separately bound CSRF token while logout SHALL invalidate both cookies."
+ac_4  = "LOGIN SHALL require an exact configured origin, JSON content type, bounded request body, and safe method handling; every authenticated mutation SHALL continue to require actor authentication, exact origin, and CSRF proof."
+ac_5  = "WHEN deployment authentication is configured, unauthenticated document requests SHALL receive no actor identity or session credential, operator APIs SHALL reject access, and authenticated document requests SHALL receive the actor bootstrap without embedding any credential."
+ac_6  = "ION SHALL fail closed when authentication configuration is partial, ambiguous, or disabled on a non-loopback origin or detected Railway deployment; loopback-only development MAY retain the existing automatic local operator session."
+ac_7  = "A production-path suite SHALL prove valid login, invalid and throttled login, status, logout, expiry, restart invalidation, cookie properties, CSRF, origin, payload bounds, no credential leakage, unauthenticated API denial, authenticated browser use, and Railway fail-closed configuration."
+
+# ================================ TASKS ==================================
+
+[tasks]
+heading = "Implementation Plan: Foundation → Epistemic Core → Security → Memory → Execution → Multiplicity → Liveness → Ecosystem → Presence → Native Workflows → Causal Continuity → Disciplined Work → Embedded Professional Software Studio → Semantic Agent Computer → Agent-Scoped Scheduling → Private Agent Computer and Railway Deployment → Media Studio → Deployment Authentication → Office Studio"
+
+[task.1]
+section = "Phase 1 — Foundation (Weeks 1-4)"
+title   = "Session store, Vault, O1 Protocol, Tool Registry, Basic Agent Loop"
+status  = "pending"
+
+[task.1.1]
+title  = "Project scaffolding + SQLite session store"
+status = "done"
+wave   = 1
+do_1   = "Initialize Go module, CI pipeline, linting config, Makefile"
+do_2   = "Implement SQLite session store with WAL mode, FTS5, schema migrations"
+do_3   = "Implement per-row encryption for messages.content"
+do_4   = "Implement compression-triggered session splitting"
+do_5   = "Test: round-trip encrypt/decrypt, FTS5 search, session splitting, concurrent reads"
+reqs   = ["1.1", "1.2", "1.3", "1.4", "1.5"]
+
+[task.1.2]
+title  = "Vault encryption layer"
+status = "done"
+wave   = 1
+do_1   = "Implement AES-256-GCM envelope encryption (KEK → User Key → DEK)"
+do_2   = "Implement KEK source (machine-bound systemd credential for headless Linux; legacy libsecret compatibility)"
+do_3   = "Implement key rotation (atomic, no partial states)"
+do_4   = "Implement key zeroization on shutdown"
+do_5   = "Test: round-trip, wrong key, key rotation, zeroization"
+reqs   = ["2.1", "2.2", "2.3", "2.4", "2.5"]
+
+[task.1.3]
+title  = "O1 Protocol + Provider Abstraction"
+status = "done"
+wave   = 2
+do_1   = "Implement NormalizedGeneration, NormalizedToolCall, TokenUsage types"
+do_2   = "Implement ProviderAdapter interface"
+do_3   = "Implement OpenAI adapter (first provider)"
+do_4   = "Implement Anthropic adapter (second provider)"
+do_5   = "Implement provider pool with credential rotation and fallback chain"
+do_6   = "Test: adapter correctness, credential rotation, fallback chain"
+reqs   = ["3.1", "3.2", "3.3", "3.4"]
+requires = ["1.1"]
+
+[task.1.4]
+title  = "Self-registering tool registry + basic agent loop"
+status = "done"
+wave   = 2
+do_1   = "Implement registry.register() with check_fn readiness probe"
+do_2   = "Implement tool discovery (scan for register calls)"
+do_3   = "Implement basic agent loop (perception → action)"
+do_4   = "Implement tool execution with timeout and error handling"
+do_5   = "Test: tool registration, readiness probe, basic tool call"
+reqs   = ["4.1", "4.2", "4.3", "4.4"]
+requires = ["1.3"]
+
+[task.1.5]
+title  = "Policy pipeline + SSRF dispatcher + security foundation"
+status = "done"
+wave   = 3
+do_1   = "Implement 5-layer policy pipeline (Sandbox, Profile, Provider, Sender, Group)"
+do_2   = "Implement GREEN/YELLOW/RED safety classification enforcement"
+do_3   = "Implement SSRF dispatcher (private IP blocklist, DNS rebinding prevention)"
+do_4   = "Implement KEK source (OS keychain)"
+do_5   = "DAY ZERO GATE: All 30 DZ items must pass"
+do_6   = "Test: all five layers, safety classification, SSRF blocking"
+reqs   = ["5.1", "5.2", "5.3", "5.4", "5.5"]
+requires = ["1.4"]
+
+[task.2]
+section = "Phase 2 — Epistemic Core (Weeks 5-8)"
+title   = "Premise Ledger, Prediction Dispatch, Self-Model, Cassandra, MMR/SMT"
+status  = "pending"
+
+[task.2.1]
+title  = "MMR + SMT + Journal infrastructure"
+status = "done"
+wave   = 4
+do_1   = "Implement BLAKE3 integration"
+do_2   = "Implement MMR append and root computation"
+do_3   = "Implement SMT per-namespace state commitments"
+do_4   = "Implement byte-deterministic replay verification"
+do_5   = "Test: MMR append, root computation, proof generation, proof verification, replay"
+reqs   = ["10.1", "10.2", "10.3", "10.4", "10.5"]
+requires = ["1.5"]
+
+[task.2.2]
+title  = "Premise ledger + prediction-carrying dispatch"
+status = "done"
+wave   = 5
+do_1   = "Implement premise extraction from tool calls"
+do_2   = "Implement MMR-bound citations (Citation struct)"
+do_3   = "Implement prediction-carrying dispatch (expect parameter)"
+do_4   = "Implement evidence-delta convergence detection"
+do_5   = "Test: premise extraction, citation verification, prediction mismatch, convergence"
+reqs   = ["6.1", "6.2", "6.3", "6.4", "6.5", "7.1", "7.2", "7.3", "7.4", "7.5"]
+requires = ["2.1"]
+
+[task.2.3]
+title  = "Self-model + Cassandra doubt controller"
+status = "done"
+wave   = 5
+do_1   = "Implement self-model (structural, code-derived, evolutionary)"
+do_2   = "Implement immutable safety constraints"
+do_3   = "Implement Cassandra doubt controller (rate-limited)"
+do_4   = "Implement dual-record audit trail"
+do_5   = "Test: self-model evolution, immutable core, Cassandra rate limits, dual-record"
+reqs   = ["8.1", "8.2", "8.3", "8.4", "8.5", "9.1", "9.2", "9.3", "9.4", "9.5", "9.6"]
+requires = ["2.2"]
+
+[task.2.4]
+title  = "Phase 2.5: Security integration"
+status = "done"
+wave   = 6
+do_1   = "Implement safety classification enforcement (44 items)"
+do_2   = "Implement emotional state decoupling (CanInfluenceSafety returns false)"
+do_3   = "Implement circuit breakers (frustration, fatigue, cross-axis)"
+do_4   = "Implement sub-agent HMAC authentication"
+do_5   = "Implement closed-verb protocol"
+do_6   = "Implement honeypot memory canaries"
+do_7   = "Implement safety dashboard backend (WebSocket API)"
+do_8   = "GATE: Red-team adversarial test suite passes"
+do_9   = "Test: all SADR decisions, all circuit breakers, all adversarial paths"
+reqs   = ["5.1-5.5", "18.3", "18.4", "16.3", "10.4"]
+requires = ["2.3"]
+
+[task.3]
+section = "Phase 3 — Memory (Weeks 9-12)"
+title   = "Cortex, HNSW, Activation Composer, Prefetch, Cross-Session Search"
+status  = "pending"
+
+[task.3.1]
+title  = "Cortex core: 9-type taxonomy, journal, version chains"
+status = "done"
+wave   = 7
+do_1   = "Implement 9-type taxonomy (Go constants + type checks)"
+do_2   = "Implement append-only journal writer goroutine"
+do_3   = "Implement memory version chains"
+do_4   = "Implement source trust level tracking"
+do_5   = "Test: CRUD with correct types, journal append-only, version chains"
+reqs   = ["10.1", "10.2", "10.3"]
+requires = ["2.4"]
+
+[task.3.2]
+title  = "HNSW microservice (Rust) + Go client"
+status = "done"
+wave   = 7
+do_1   = "Implement Rust HNSW service (usearch) over UDS"
+do_2   = "Implement binary protocol for vector insert/search/delete"
+do_3   = "Implement Go client for HNSW service"
+do_4   = "Implement embedding generation"
+do_5   = "Implement fallback to brute-force on service crash"
+do_6   = "Test: insert 10K vectors, search k=10, crash fallback, rebuild on divergence"
+reqs   = ["12.1", "12.2", "12.3", "12.4", "12.5"]
+requires = ["3.1"]
+
+[task.3.3]
+title  = "Activation composer + memory prefetch"
+status = "done"
+wave   = 8
+do_1   = "Implement 4+1 tier working set assembly"
+do_2   = "Implement budget trimming by salience"
+do_3   = "Implement memory prefetch pipeline"
+do_4   = "Implement cross-session FTS5 search"
+do_5   = "Test: tier assembly, budget trimming, prefetch <30ms p99, FTS5 search"
+reqs   = ["11.1", "11.2", "11.3", "11.4", "11.5"]
+requires = ["3.2"]
+
+[task.4]
+section = "Phase 4 — Execution (Weeks 13-16)"
+title   = "Unified Policy-Bound Execution, Honest Partials, Error Recovery, Trajectory Export"
+status  = "pending"
+
+[task.4.1]
+title  = "Unified consequential-operation policy, approval, idempotency, and evidence"
+status = "done"
+wave   = 9
+do_1   = "Remove the private rigorous-operation registry, core_execute gateway, rail fields, and misleading placeholders"
+do_2   = "Route consequential operations through the shared production tool manager with accurate RED classification and explicit approval"
+do_3   = "Require idempotency and outcome reconciliation for state-changing operations; retain receipts as optional audit evidence"
+do_4   = "Test: no core_execute surface, unapproved RED denial, approved normal-path execution exactly once, operator-visible evidence"
+reqs   = ["13.1", "13.2", "13.3", "13.4", "13.5"]
+requires = ["3.1"]
+
+[task.4.2]
+title  = "Honest partials + error recovery cascade"
+status = "done"
+wave   = 9
+do_1   = "Implement ErrIncomplete"
+do_2   = "Implement 6-layer error recovery cascade"
+do_3   = "Implement tool loop detection + idle timeout breaker"
+do_4   = "Test: stalled turn → ErrIncomplete, cascade layers, loop detection"
+reqs   = ["14.1", "14.2", "14.3", "14.4", "15.1", "15.2", "15.3"]
+requires = ["3.1"]
+
+[task.5]
+section = "Phase 5 — Multiplicity (Weeks 17-20)"
+title   = "Sub-Agent Spawning, Closed-Verb Protocol, Orphan Recovery, Lanes"
+status  = "pending"
+
+[task.5.1]
+title  = "Sub-agent core: spawning, reduced self-model, lanes"
+status = "done"
+wave   = 10
+do_1   = "Implement sub-agent spawning (depth ≤2)"
+do_2   = "Implement ReducedSelfModel (no vault keys)"
+do_3   = "Implement goroutine per sub-agent"
+do_4   = "Implement lane-based concurrency (global, session, agent)"
+do_5   = "Test: spawn with inherited model, lane limits enforced"
+reqs   = ["16.1", "16.5"]
+requires = ["4.2"]
+
+[task.5.2]
+title  = "Closed-verb protocol + orphan recovery"
+status = "done"
+wave   = 10
+do_1   = "Implement 10 closed verbs with HMAC authentication"
+do_2   = "Implement parent registry and verification"
+do_3   = "Implement push-based completion"
+do_4   = "Implement orphan detection and recovery"
+do_5   = "Test: HMAC verification, push completion, orphan detection and recovery"
+reqs   = ["16.2", "16.3", "16.4", "16.6"]
+requires = ["5.1"]
+
+[task.6]
+section = "Phase 6 — Liveness (Weeks 21-28)"
+title   = "Emotional State, Curiosity, Dreamweaver, Forgetting, Social, Goals, Temporal"
+status  = "pending"
+
+[task.6.1]
+title  = "Emotional state + metacognitive confidence monitor"
+status = "done"
+wave   = 11
+do_1   = "Implement 6-axis emotional state with decay"
+do_2   = "Implement behavioral modulation"
+do_3   = "Implement metacognitive confidence monitor (decoupled)"
+do_4   = "Implement emotional state persistence"
+do_5   = "Implement circuit breakers"
+do_6   = "Test: decay math, behavioral modulation, safety decoupling, circuit breakers, persistence"
+reqs   = ["18.1", "18.2", "18.3", "18.4", "18.5", "18.6"]
+requires = ["2.4"]
+
+[task.6.2]
+title  = "Curiosity engine"
+status = "done"
+wave   = 11
+do_1   = "Implement fringe detection (connection-density percentile)"
+do_2   = "Implement contradiction detection (pairwise consistency)"
+do_3   = "Implement gap detection (recurring unanswerable questions)"
+do_4   = "Implement Automatrix integration"
+do_5   = "Test: curiosity targets from graph anomalies"
+reqs   = ["19.1", "19.2", "19.3", "19.4"]
+requires = ["6.1"]
+
+[task.6.3]
+title  = "Dreamweaver"
+status = "done"
+wave   = 12
+do_1   = "Implement memory cluster selection"
+do_2   = "Implement cross-domain pattern matching"
+do_3   = "Implement insight generation (Belief memories)"
+do_4   = "Implement memory consolidation (merge weak memories)"
+do_5   = "Implement provenance tracking and auto-quarantine"
+do_6   = "Test: cycle produces valid Beliefs, Identity/Preference/Constraint untouched, adversarial quarantine"
+reqs   = ["20.1", "20.2", "20.3", "20.4", "20.5"]
+requires = ["6.2"]
+
+[task.6.4]
+title  = "Strategic forgetting + social awareness + goals + temporal embodiment"
+status = "done"
+wave   = 12
+do_1   = "Production-compose scheduled memory decay by type (half-lives) with encrypted restart state"
+do_2   = "Rebuild load-bearing premise protection before every archival cycle"
+do_3   = "Production-compose encrypted relationship state, restart-safe trust accounting, authoritative preferences, provider guidance, events, projections, and isolation"
+do_4   = "Production-compose proposal-only goal generation with restart-safe deduplication"
+do_5   = "Production-compose encrypted absolute temporal markers, emotional transitions, provider guidance, events, projections, and restart continuity"
+do_6   = "Implement repair-after-failure identity"
+do_7   = "Implement aesthetic judgment (preferences model)"
+do_8   = "Test: decay rates, load-bearing protection, trust rate limiting, goal generation, temporal modulation"
+do_9   = "Production-compose encrypted first-contact preferred-name capture, provider-context naming, reasoning-event enforcement, restart continuity, and actor isolation"
+reqs   = ["21.1-21.5", "22.1-22.8", "23.1-23.3", "24.1-24.3"]
+requires = ["6.3"]
+
+[task.7]
+section = "Phase 7 — Ecosystem (Weeks 29-32)"
+title   = "Plugin SDK, Skill System, MCP, Multi-Channel Gateway"
+status  = "pending"
+
+[task.7.1]
+title  = "Plugin SDK + skill system + MCP"
+status = "done"
+wave   = 13
+do_1   = "Implement plugin SDK (700+ API surface)"
+do_2   = "Implement skill system (SKILL.md + bundles + Skill Forge)"
+do_3   = "Implement MCP server + client"
+do_4   = "Production-compose first-class Telegram through the shared turn path; retain isolated Discord and Slack gateway contracts"
+do_5   = "Test: plugin registration, skill save/load, MCP server/client, multi-channel"
+reqs   = ["29.1-29.4", "30.1-30.4"]
+requires = ["6.4"]
+
+[task.7.2]
+title  = "Operator skill library ingestion and validation-gated self-authoring"
+status = "done"
+wave   = 14
+do_1   = "Recursively discover and normalize every operator-provided SKILL.md bundle while preserving bounded provenance, references, templates, scripts, workflows, and explicit compatibility"
+do_2   = "Install imported bundles durably and idempotently without executing source content or overwriting authored revisions"
+do_3   = "Rank and load all task-applicable skills using trigger, semantic task terms, platform, and ready-tool constraints through a bounded non-authoritative context pack"
+do_4   = "Detect verified novel-task completion and generate a secret-free evidence-backed new-skill candidate while rejecting failed, incomplete, or unverified outcomes"
+do_5   = "Automatically run at least three held-out applicability and safety cases, atomically activate passing candidates, reject unsafe or non-improving candidates, and preserve version and rollback history"
+do_6   = "Expose imported, active, proposed, adopted, and rejected skill state and prove complete-library import, recurrence, refinement, restart durability, capability filtering, and automatic gated activation"
+reqs   = ["30.1-30.9"]
+requires = ["7.1"]
+
+[task.8]
+section = "Phase 8 — Presence (Weeks 33-36)"
+title   = "Heartbeat, Morning Brief, Automatrix, SOUL.md, Safety Dashboard"
+status  = "pending"
+
+[task.8.1]
+title  = "Heartbeat + morning brief + Automatrix + SOUL.md + dashboard"
+status = "done"
+wave   = 14
+do_1   = "Production-compose the 60-second heartbeat, encrypted schedules, missed-run recovery, and truthful projections"
+do_2   = "Implement morning brief (profile-driven, policy-checked)"
+do_3   = "Implement Automatrix (idle-time work queue)"
+do_4   = "Production-compose secure SOUL bootstrap, per-turn loading, proposal/diff/RED approval, atomic history, restart recovery, projections, and rollback"
+do_5   = "Implement safety dashboard frontend"
+do_6   = "Implement weekly integrity digest"
+do_7   = "GATE: Weekly integrity digest operational"
+do_8   = "Test: heartbeat tick, morning brief, Automatrix, dashboard, integrity digest"
+reqs   = ["25.1-25.3", "26.1-26.3", "27.1-27.4", "28.1-28.3"]
+requires = ["7.1"]
+
+[task.9]
+section = "Phase 9 — Operator Experience (Weeks 37-46)"
+title   = "Shared Control Plane, Full Browser Application, and Terminal UI"
+status  = "pending"
+
+[task.9.1]
+title  = "Generated protocol + control plane + secure transports"
+status = "done"
+wave   = 15
+do_1   = "Define the versioned Go command, query, response, event, error, snapshot, and server command-catalog schemas"
+do_2   = "Deterministically generate checked-in TypeScript types and runtime validators as the only client wire contract"
+do_3   = "Implement idempotent optimistic command/query dispatch through production application-service, policy, approval, and audit boundaries"
+do_4   = "Implement bounded durable sequenced event journal, replay, acknowledgements, snapshot fallback, explicit gap markers, and state reconstruction"
+do_5   = "Implement authenticated HTTPS/WebSocket browser transport with CSRF, origin, one-time tickets, rate limits, and payload limits"
+do_6   = "Implement permission-restricted UDS/stdio local transport with short-lived capability authentication and bounded clients"
+do_7   = "Test: headless encrypted session, streamed turn, approval response, every-boundary reconnect, idempotency, optimistic conflict, exact replay, and retention gap"
+reqs   = ["31.1-31.7"]
+requires = ["8.1"]
+
+[task.9.2]
+title  = "Web shell + persistent chat + critical operator workflows"
+status = "done"
+wave   = 16
+do_1   = "Build the React/TypeScript application shell, design tokens, responsive navigation, Command Center, and persistent mounted chat host"
+do_2   = "Build safe GitHub-flavored Markdown responses, structured chat, sessions, typed prompts, approvals, task and agent panel, safety console, and integrity console"
+do_3   = "Render production tool, premise, prediction, citation, task, sub-agent, policy, receipt, and memory-provenance events"
+do_4   = "Implement queue, steer, cancel, retry, branch, resume, keyboard command palette, reduced motion, and WCAG 2.2 AA baseline"
+do_5   = "Test: real browser tool conversation and RED approval through production policy and encrypted session storage without navigation stream loss"
+reqs   = ["32.1-32.5"]
+requires = ["9.1"]
+
+[task.9.3]
+title  = "Full web subsystem control plane"
+status = "done"
+wave   = 17
+do_1   = "Build memory, epistemics, task graph, swarm, liveness, Automatrix, tools, execution, policy, receipt, and integrity surfaces"
+do_2   = "Build provider, MCP, plugin, skill, channel, presence, schedule, configuration, SOUL, logs, and diagnostics surfaces"
+do_3   = "Route every supported mutation through its production application service, policy, approval, revision, and audit boundary"
+do_4   = "Sandbox and permission-scope plugin UI surfaces; implement write-only secret controls and redacted diagnostics"
+do_5   = "Test: primary-subsystem read matrix, mutation boundary matrix, secret redaction, and cross-session/profile/channel isolation"
+reqs   = ["33.1-33.5"]
+requires = ["9.2"]
+
+[task.9.4]
+title  = "First-class terminal UI"
+status = "done"
+wave   = 18
+do_1   = "Build the Ink/React shell on the shared generated protocol, client, reducer, formatter, and server command catalog"
+do_2   = "Build chat, composer, queues, prompts, approvals, sessions, providers, tasks, projects, schedules, skills, agents, inspectable memory, Computer, security, extensions, logs, and diagnostics workflows"
+do_3   = "Implement attach, supervised-local, and optional remote TLS modes with bounded startup, RPC, buffering, reconnect, retry, and shutdown"
+do_4   = "Implement keyboard-only operation, terminal color fallbacks, width-aware Unicode, portability profiles, and complete terminal-state restoration"
+do_5   = "Test: browser-parity journey, deterministic reconnect and crash recovery, command parity, terminal interactions, and terminal restoration matrix"
+reqs   = ["34.1-34.5"]
+requires = ["9.3"]
+
+[task.9.5]
+title  = "Frontend and TUI hardening, packaging, and release integration"
+status = "done"
+wave   = 19
+do_1   = "Embed the deterministic production web bundle and add `ion dashboard`"
+do_2   = "Bundle the deterministic TUI artifact and add `ion tui` attach and supervised modes"
+do_3   = "Add browser and terminal matrices plus restart, replay, backpressure, corruption, malformed-frame, authorization, isolation, and event-flood suites"
+do_4   = "Enforce JavaScript, startup, render-latency, memory, accessibility, and slow-client performance budgets"
+do_5   = "Integrate clean-install release packaging and generate operator documentation from implemented catalogs"
+do_6   = "Test: clean install runs both clients, survives daemon restart, and passes security, accessibility, portability, and performance gates"
+reqs   = ["35.1-35.6"]
+requires = ["9.4"]
+
+[task.10]
+section = "Phase 10 — Native Agent Workflows"
+title   = "Browser Runtime, Dedicated Mailbox, and Agent-Native Identity"
+status  = "pending"
+
+[task.10.1]
+title  = "Native browser and private mailbox verification vertical slice"
+status = "done"
+wave   = 20
+do_1   = "Replace the MCP-dependent browser placeholder with actor/session-isolated native Chromium/CDP navigation, observation, reversible interaction, and RED submit tools"
+do_2   = "Intercept browser requests, reject unsafe destinations, bound semantic page projections, and keep browser profiles volatile and private"
+do_3   = "Implement a receive-only IMAP/TLS source plus Vault-encrypted verification store with redacted metadata"
+do_4   = "Transfer codes and confirmation links server-side into an origin-matched browser target through a RED approval without returning the secret"
+do_5   = "Test: real Chromium workflow, sensitive-field refusal, unapproved RED denial, encrypted mailbox restart, private verification transfer, and exactly-once submit"
+reqs   = ["36.1", "36.2", "36.3", "36.4", "36.6"]
+requires = ["1.4"]
+
+[task.10.2]
+title  = "Supervised browser sessions, credential references, and operator handoffs"
+status = "done"
+wave   = 21
+do_1   = "Add browser workflow status, live semantic preview, pause, resume, cancel, and exact approval consequence surfaces to web and TUI"
+do_2   = "Add write-only Vault credential references and origin-bound browser insertion without exposing secret values to the model or browser event stream"
+do_3   = "Add typed human handoffs for CAPTCHA, passkeys, legal identity, terms, payment, recovery, and ambiguous consequential controls"
+do_4   = "Add restart reconciliation for in-progress browser workflows without persisting plaintext cookies, codes, or form secrets"
+do_5   = "Test: adversarial pages, redirect and subresource SSRF, prompt injection, stale refs, popup/download boundaries, cancellation, restart, and secret redaction"
+reqs   = ["36.2", "36.3", "36.4", "36.6"]
+requires = ["10.1"]
+
+[task.10.3]
+title  = "Interoperable agent-native signup and delegated identity profile"
+status = "done"
+wave   = 22
+do_1   = "Specify well-known discovery, WebAuthn-compatible agent credential proof, user delegation, requested scopes, expiry, revocation, and recovery"
+do_2   = "Implement relying-party and agent conformance fixtures with origin binding, replay resistance, least authority, and explicit service policy"
+do_3   = "Expose Agent account as a third signup choice without claiming personhood or bypassing age, identity, legal consent, payment, or abuse controls"
+do_4   = "Publish a versioned protocol document and compatibility test vectors"
+do_5   = "Test: origin confusion, replay, revoked delegation, scope escalation, phishing relay, account recovery, and human-account separation fail closed"
+reqs   = ["36.5"]
+requires = ["10.2"]
+
+[task.11]
+section = "Phase 11 — Causal Liveness and Visible Continuity"
+title   = "Enforced Decision Policy, Production Repair, Idle Action, Return Briefs, and Longitudinal Proof"
+status  = "pending"
+
+[task.11.1]
+title  = "Typed causal liveness decision policy"
+status = "done"
+wave   = 23
+do_1   = "Derive bounded planner and execution parameters from emotional, temporal, relationship, confidence, repair, and confirmed-aesthetic state"
+do_2   = "Enforce retry, tool, exploration, and fan-out bounds in the shared production agent loop"
+do_3   = "Persist and project user-safe causal explanations while keeping raw state under technical details"
+do_4   = "Test counterfactual behavior with invariant safety, approval, evidence, and required verification"
+reqs   = ["37.1", "37.2"]
+requires = ["6.4"]
+
+[task.11.2]
+title  = "Production repair, aesthetic selection, and idle completion"
+status = "done"
+wave   = 24
+do_1   = "Wire failure, recovery, evidence, lesson, prevention, and future activation through the production turn lifecycle"
+do_2   = "Wire explicit confirmed aesthetic preferences into solution selection with review and revision controls"
+do_3   = "Compose approval-gated Automatrix execution and sub-agent result synthesis through the heartbeat"
+do_4   = "Add causal provenance, cooldowns, and deduplication for event-driven curiosity and Dreamweaver work"
+reqs   = ["37.3", "37.4", "37.5", "37.6"]
+requires = ["11.1"]
+
+[task.11.3]
+title  = "Since-you-were-away and typed morning brief experience"
+status = "done"
+wave   = 25
+do_1   = "Build actor-scoped return briefs from allowlisted durable evidence without fabricated activity"
+do_2   = "Surface discoveries, repairs, proposals, approvals, incomplete work, and deadlines in web and TUI"
+do_3   = "Show behavioral consequences by default and keep numeric liveness state under technical details"
+reqs   = ["37.7"]
+requires = ["11.2", "9.4"]
+
+[task.11.4]
+title  = "Reviewable relationship profile and normal-timescale temporal embodiment"
+status = "done"
+wave   = 25
+do_1   = "Implement inspect, correct, pin, and remove controls for explicit and inferred communication and workflow preferences"
+do_2   = "Apply gradual early, middle, stagnant, deadline, interrupted, return, long-session, and closure temporal decisions"
+do_3   = "Propose a richer SOUL v2 through the existing diff, RED approval, history, and rollback path"
+reqs   = ["37.8", "37.9"]
+requires = ["11.2"]
+
+[task.11.5]
+title  = "Longitudinal restart and anti-performance acceptance"
+status = "done"
+wave   = 26
+do_1   = "Run multi-day restart, cross-actor, counterfactual, exactly-once, and later-activation production journeys"
+do_2   = "Prove no activity, feeling, insight, repair, preference, or continuity claim exists without durable evidence"
+do_3   = "Reconcile Phase 6, Phase 8, Phase 9, and Phase 11 statuses only after live browser, TUI, restart, and provider acceptance"
+reqs   = ["37.10"]
+requires = ["11.3", "11.4"]
+
+[task.12]
+section = "Phase 12 — Disciplined Autonomous Work"
+title   = "Outcome Contracts, Evidence Registry, Review Lenses, Autonomy Controls, and Workflow Recipes"
+status  = "pending"
+
+[task.12.1]
+title  = "Durable work brief and evidence-bound completion vertical slice"
+status = "done"
+wave   = 27
+do_1   = "Implement encrypted actor-scoped outcome contracts and derive a concise current Work Brief and next action"
+do_2   = "Implement a workspace-confined artifact registry with server-side hashing, criterion coverage, and verification evidence"
+do_3   = "Implement deterministic risk-based review lenses and curated workflow recipes with entry, exit, evidence, and human-gate metadata"
+do_4   = "Implement off, suggest, and approved autonomy modes plus pause, resume, tool, token, time, error, and cooldown budgets without weakening policy"
+do_5   = "Expose production control-plane operations and task-first web and TUI projections using the shared generated contract and reducer"
+do_6   = "Test encrypted restart, cross-actor isolation, path and symlink attacks, false-completion denial, exact budget enforcement, and workflow resumption"
+reqs   = ["38.1-38.8"]
+requires = ["10.1"]
+
+[task.13]
+section = "Phase 13 — Embedded Professional Software Development Capability"
+title   = "One Full-Range Agent with Projects, Isolated Workspaces, Spec-Driven Engineering, Live Preview, Verification, Delivery, and Expert Packs"
+status  = "pending"
+
+[task.13.1]
+title  = "Project registry and versioned WorkspaceHost contract"
+status = "done"
+wave   = 28
+do_1   = "Implement encrypted actor-scoped project registry for template creation, archive import, existing-directory attachment, and authorized repository clone"
+do_2   = "Define generated WorkspaceHost capabilities and operation envelopes for project, files, processes, Git, preview, artifacts, integrations, and system functions"
+do_3   = "Implement direct-local and rootless container hosts with runtime capability negotiation, resource and egress policy, secret grants, and typed lifecycle events"
+do_4   = "Implement provision, readiness, pause, resume, archive, and teardown reconciliation without losing artifacts or uncommitted work"
+do_5   = "Test local and container create, import, clone, restart, isolation, resource exhaustion, stale revision, and duplicate mutation"
+reqs   = ["39.1-39.6"]
+requires = ["9.1", "12.1"]
+
+[task.13.2]
+title  = "Plain-language intent compiler and authoritative spec workflow"
+status = "done"
+wave   = 29
+do_1   = "Bind software requests to project revisions and outcome contracts and inspect repository instructions before planning"
+do_2   = "Implement proposed, accepted, rejected, and superseded spec deltas with user-visible behavior, constraints, criteria, risks, verification, rollback, and task dependencies"
+do_3   = "Implement assumption and material-ambiguity policy plus criterion correlation for tasks, patches, tools, reviews, evidence, and artifacts"
+do_4   = "Implement spec-to-code and generated-view drift detection that blocks unsupported completion"
+do_5   = "Test greenfield, brownfield, ambiguity, scope change, restart, rejected proposal, drift, and false-completion journeys"
+reqs   = ["40.1-40.6"]
+requires = ["13.1"]
+
+[task.13.3]
+title  = "Incremental code graph, search, and context planner"
+status = "done"
+wave   = 29
+do_1   = "Implement ignore-aware project inventory, stack and entry-point discovery, symbol and reference index, dependency graph, and repository-instruction resolver"
+do_2   = "Implement revision-cited lexical, regex, filename, symbol, reference, dependency, diagnostic, and semantic retrieval"
+do_3   = "Implement task-specific progressive context packs with explicit omission, truncation, protected-path, generated, binary, and secret handling"
+do_4   = "Integrate current spec, Work Brief, Git history, diagnostics, skills, and verified evidence into context selection"
+do_5   = "Benchmark incremental freshness, monorepo scoping, multi-language navigation, secret exclusion, stale citations, and retrieval quality"
+reqs   = ["41.1-41.6"]
+requires = ["13.1"]
+
+[task.13.4]
+title  = "Atomic patch sets, durable terminals, and dependency policy"
+status = "done"
+wave   = 30
+do_1   = "Complete safe project file operations and implement baseline-bound multi-file patch sets with preflight, hashes, rollback, and crash reconciliation"
+do_2   = "Implement durable supervised processes and PTYs with stream replay, input, resize, signals, cancellation, process-tree cleanup, output bounds, and redaction"
+do_3   = "Implement runtime and package-manager discovery plus lockfile-preserving dependency installation and package-script supply-chain policy"
+do_4   = "Implement optimistic revisions and conflict surfaces for concurrent human and agent edits while preserving every pre-existing dirty change"
+do_5   = "Test atomicity, stale patches, rollback, PTY reconnect, floods, runaway processes, package attacks, symlink swaps, and concurrent edits"
+reqs   = ["42.1-42.6"]
+requires = ["1.5", "13.3"]
+
+[task.13.5]
+title  = "Git versions, reviewable changes, and repository providers"
+status = "done"
+wave   = 31
+do_1   = "Implement read-only Git baseline, status, history, blame, branch, remote, staged and unstaged diff, rename, binary, and generated-file projections"
+do_2   = "Implement separately authorized branch, checkpoint, commit, tag, sync, push, merge, and pull-request operations with exact change scoping"
+do_3   = "Implement criterion-grouped change review, hunk selection, comments, and durable review work items"
+do_4   = "Implement recovery-safe historical preview and transactional code or conversation restore"
+do_5   = "Implement normalized provider adapters for repositories, branches, issues, pull requests, checks, review threads, and mergeability"
+do_6   = "Test dirty-tree preservation, partial staging, conflicts, interrupted preview, rejected remote mutation, pagination, stale reviews, and exactly-once draft PR creation"
+reqs   = ["43.1-43.6"]
+requires = ["13.4"]
+
+[task.13.6]
+title  = "Runtime manager, secure live preview, and unified diagnostics"
+status = "done"
+wave   = 32
+do_1   = "Implement inferred and configured install, build, dev, test, and start commands with port allocation, readiness, named services, reload, restart, stop, and crash recovery"
+do_2   = "Implement origin-isolated preview with address and service controls, viewport presets, screenshots, browser inspection, and safe external opening"
+do_3   = "Normalize console, process, build, type, lint, browser, network, and source-map evidence into deduplicated Problems and bounded fix workflows"
+do_4   = "Implement DOM and accessibility inspection, element selection, annotations, and reviewable visual-edit patch proposals"
+do_5   = "Run representative static, frontend, API, and full-stack browser matrices including mobile, dark mode, hostile preview, crash repair, and cleanup"
+reqs   = ["44.1-44.6"]
+requires = ["10.2", "13.5"]
+
+[task.13.7]
+title  = "Verification manifest, repair loop, and independent release review"
+status = "done"
+wave   = 33
+do_1   = "Derive versioned per-project verification manifests from accepted spec criteria and inspected repository commands"
+do_2   = "Implement targeted-to-full gate execution with revision-bound logs, reports, coverage, screenshots, traces, hashes, and criterion coverage"
+do_3   = "Implement stable failure signatures and bounded diagnose, patch, rerun loops with regression, stagnation, flake, environment, and budget stops"
+do_4   = "Extend review routing with independent data, migration, accessibility, performance, operations, and release evidence lenses"
+do_5   = "Implement explicit scoped expiring waivers that remain uncovered rather than passing"
+do_6   = "Test injected compile, test, visual, accessibility, security, migration, performance, flake, timeout, and false-green failures"
+reqs   = ["45.1-45.6"]
+requires = ["13.2", "13.6"]
+
+[task.13.8]
+title  = "Full-stack resources, environments, CI, deployment, and rollback"
+status = "done"
+wave   = 34
+do_1   = "Implement provider-neutral desired-state catalog and adapters for data, storage, authentication, email, queues, schedules, analytics, payments, and external APIs"
+do_2   = "Implement versioned environment schemas and least-authority write-only secret grants across development, test, preview, staging, and production"
+do_3   = "Implement migration inspect, generate, dry-run, isolation, destructive analysis, ordered promotion, backup, and rollback workflows"
+do_4   = "Implement reviewed CI patches plus preview, staging, and RED production deployment plans with immutable artifacts, idempotency, reconciliation, health, cost, and rollback evidence"
+do_5   = "Implement release notes, versioning, domain and DNS readiness, provider conformance, portable export, and one live staging acceptance journey"
+reqs   = ["46.1-46.6"]
+requires = ["13.7"]
+
+[task.13.9]
+title  = "Embedded responsive Software Studio and intent-to-preview experience"
+status = "done"
+wave   = 34
+do_1   = "Build task-first project home with prompt-preserving create, import, clone, template, recent, and resume flows"
+do_2   = "Keep conversation and Work Brief mounted while adding adaptive Plan, Changes, Code, Terminal, Preview, Problems, Tests, Security, Data, and Deploy panels"
+do_3   = "Render structured engineering, verification, sub-agent, recovery, and deployment activity from the shared generated reducer with progressive technical detail"
+do_4   = "Implement steering, decisions, spec revision, plan and diff comments, preview selection, version restore, and terminal or browser takeover without races"
+do_5   = "Pass WCAG 2.2 AA, keyboard, screen-reader, reduced-motion, localization, 390px-to-wide-desktop, dark and light, and expert-shortcut acceptance"
+do_6   = "Run first-time-user intent-to-staging and expert diff, terminal, Git, diagnostics, and recovery browser journeys, then return to field-general work without identity or continuity loss"
+do_7   = "Make every visible Studio entry path misuse-tolerant: create or bind structured project scope before mutation, preserve that scope across queue, steer, retry, reconnect, restart, and navigation, and reject contradictory or missing scope without falling back to the general workspace"
+reqs   = ["47.1-47.9"]
+requires = ["9.5", "13.6", "13.7"]
+
+[task.13.10]
+title  = "Ion engineering supervisor and restart-safe specialist swarm"
+status = "done"
+wave   = 35
+do_1   = "Compile accepted specs into durable dependency DAGs and dispatch only ready work through one authoritative supervisor state"
+do_2   = "Define least-authority task and evidence contracts for discovery, exploration, implementation, test, security, data, frontend, performance, operations, and review specialists"
+do_3   = "Implement file and service scopes, leases, bounded fan-out, deterministic merge order, cancellation propagation, and structured result synthesis"
+do_4   = "Persist and reconcile queue, attempts, patches, processes, verification, approvals, budgets, artifacts, Git, and external effects before retry"
+do_5   = "Enforce per-project and per-outcome token, cost, tool, wall-time, process, storage, network, provider-spend, retry, and parallel-agent budgets"
+do_6   = "Fault-test conflicting edits, child and parent failure, restart, duplicates, uncertain effects, steering, cancellation, and budget exhaustion"
+reqs   = ["48.1-48.6"]
+requires = ["12.1", "13.7"]
+
+[task.13.11]
+title  = "Issue, review, CI, webhook, schedule, and maintenance intake"
+status = "pending"
+wave   = 36
+do_1   = "Normalize authorized engineering intake with untrusted-content boundaries, permissions, project and revision routing, deduplication, and delivery targets"
+do_2   = "Implement spec-gated recipes for issue work, failing checks, review comments, dependencies, vulnerabilities, releases, documentation, flakes, and incidents"
+do_3   = "Run automations in isolated branches or workspaces with bounded concurrency, cooldowns, poison-item handling, and exactly-once delivery"
+do_4   = "Project honest durable status and evidence back to sources without secrets, private reasoning, or unrelated workspace data"
+do_5   = "Test injection, replay, duplicates, stale and force-updated revisions, provider outage and rate limits, review resolution, CI reruns, and draft delivery"
+reqs   = ["49.1-49.6"]
+requires = ["13.5", "13.10"]
+
+[task.13.12]
+title  = "Expert Pack framework and demonstrated cross-domain capability"
+status = "pending"
+wave   = 36
+do_1   = "Define versioned Expert Packs with ontology, tasks, sources, methods, tools, workflows, safety, scope, freshness, schemas, verification, benchmarks, and limits"
+do_2   = "Implement evidence-based pack routing, user inspection and control, source freshness, uncertainty, human-specialist escalation, and self-model integration"
+do_3   = "Implement provenance-preserving candidate generation, private-data redaction, adversarial evaluation, review, activation, rollback, confidence reduction, and quarantine"
+do_4   = "Implement qualified-human and jurisdiction gates for high-stakes medical, legal, financial, safety, security, and regulated workflows"
+do_5   = "Build reproducible correctness, calibration, source, tool, policy, and transfer evaluations across software, research, operations, data, design, writing, and regulated fixtures"
+reqs   = ["50.1-50.7"]
+requires = ["7.1", "13.2", "13.7"]
+
+[task.13.13]
+title  = "Clean-install intent-to-staging production acceptance"
+status = "pending"
+wave   = 37
+do_1   = "Build TypeScript frontend, full-stack web, Go, Python, Rust or systems, and brownfield monorepo fixtures with stack-appropriate security, accessibility, migration, restart, and rollback cases"
+do_2   = "Run one-request clean-install journeys from accepted spec through implementation, preview, injected-defect repair, verification, change review, and isolated staging deployment"
+do_3   = "Prove browser and TUI switching, reconnect, daemon and host restart, provider fallback, long pause and resume, concurrent edits, version restore, and exact durable reconciliation"
+do_4   = "Run adversarial repository, issue, dependency, secret, filesystem, preview, command, network, event, cross-scope, and unapproved-publication suites"
+do_5   = "Publish provisioning, index, stream, preview, replay, memory, cancellation, orphan-cleanup, and multi-hour SLO evidence on declared hardware"
+do_6   = "Reconcile Phase 13 and dependent umbrella statuses only after live production composition, criterion artifacts, truthful remaining boundaries, and portable project export are proven"
+reqs   = ["51.1-51.6"]
+requires = ["13.8", "13.9", "13.10", "13.11", "13.12"]
+
+[task.13.14]
+title  = "Provider-compatible resilient task execution and evidence convergence"
+status = "done"
+wave   = 35
+do_1   = "Implement first-class MiMo request, response, reasoning, textual-call, and buffered-stream compatibility with agentic sampling while keeping raw reasoning and internal compatibility or revision instructions and outputs outside transcript history and every client stream"
+do_2   = "Run a harmless lazy multi-turn provider capability canary and project the selected compatibility mode"
+do_3   = "Make workspace file and process tools repair missing parents, contained absolute paths, change-directory intent, and unavailable executables safely"
+do_4   = "Persist dependency-aware criterion work items and advance them only from server-verified evidence"
+do_5   = "Require every recovery retry to advance a material provider or execution strategy and scope prediction mismatches to the exact normalized action in the current turn"
+do_6   = "Add a bounded activity watchdog plus exact running, recovering, incomplete, and terminal browser and TUI projections"
+do_7   = "Gate every model final on direct satisfaction of the original request and gate active Studio outcomes additionally on durable evidence convergence"
+do_8   = "Fault-test compatibility, misuse, exact-action mismatch isolation, typed revision continuation, raw-reasoning suppression, false-final repair, restart, watchdog, projection, and premature-completion paths through production composition"
+reqs   = ["52.1-52.8"]
+requires = ["12.1", "13.1", "13.2"]
+
+[task.14]
+section = "Phase 14 — Ion Computer: Semantic Visualization of Real Agent Work"
+title   = "Tool-Triggered Events, Validated Display Models, Native Applications, Replay, Parallel Workspaces, and Anti-Theater Acceptance"
+status  = "pending"
+
+[task.14.1]
+title  = "Canonical ComputerEvent protocol and durable tool-lifecycle projection"
+status = "done"
+wave   = 38
+do_1   = "Define versioned generated ComputerEvent schemas for requested, approval, started, bounded progress, completed, failed, denied, interrupted, and outcome-unknown tool states"
+do_2   = "Instrument the shared production tool manager once so real tool calls trigger activity and authoritative tool responses, errors, approvals, artifacts, and evidence populate correlated terminal events"
+do_3   = "Persist actor, session, outcome, task, agent, tool-call, scope, risk, sequence, timestamp, display hint, and source references without duplicating execution or completion truth"
+do_4   = "Implement coalescing, payload bounds, backpressure, acknowledgements, replay, snapshot and gap recovery, duplicate suppression, and deterministic multi-agent ordering"
+do_5   = "Generate Go and TypeScript types, validators, migrations, reducer fixtures, and protocol compatibility tests"
+do_6   = "Fault-test success, approval, denial, streaming, failure, interruption, uncertain outcome, slow client, disconnect, duplicate replay, retention gap, and daemon restart"
+reqs   = ["53.1-53.6"]
+requires = ["9.1", "13.14"]
+
+[task.14.2]
+title  = "Deterministic tool-response adapters and semantic display-model registry"
+status = "done"
+wave   = 39
+do_1   = "Define generated reusable display models for search, reader, navigation, repository, code, terminal, diff, process, table, chart, document, artifact, task, agent, approval, error, and degraded views"
+do_2   = "Implement versioned adapters that prefer structured tool-response fields, attach observed, generated, summarized, inferred, or unavailable classification, and preserve evidence references"
+do_3   = "Implement strict schema validation, text and URL normalization, HTML and media sanitization, terminal-control neutralization, redaction, size bounds, and generic fallback"
+do_4   = "Implement display-model migration and explicit unsupported-version behavior for retained event replay"
+do_5   = "Build adapter conformance fixtures from real bounded tool results without copying secrets or private workspace data into test assets"
+do_6   = "Test exact extraction, malformed and oversized results, missing fields, contradictory summaries, untrusted markup, fallback, migration, and evidence linkage"
+reqs   = ["54.1-54.7"]
+requires = ["14.1"]
+
+[task.14.3]
+title  = "Resizable live computer shell, timeline, history, and explicit interaction states"
+status = "done"
+wave   = 39
+do_1   = "Add a resizable persistent-conversation and Ion Computer layout with full-screen, adaptive mobile, active application, agent, action, status, and latest-event header"
+do_2   = "Implement Follow live, pause following, durable timeline navigation, historical inspection, independent user selection, and Back to live on the shared reducer"
+do_3   = "Separate read-only Watch and Explore state from explicit queue, steer, retry, approve, deny, pause, resume, cancel, and takeover commands"
+do_4   = "Implement honest loading, empty, awaiting-decision, recovering, blocked, failed, interrupted, uncertain, completed, retention-gap, and unsupported states without fabricated cursor, typing, or progress"
+do_5   = "Implement keyboard and screen-reader critical paths, reduced motion, localization-safe layout, dark and light themes, bounded history virtualization, and terminal-appropriate parity"
+do_6   = "Run real web and TUI resize, full-screen, follow, history, steer, reconnect, refresh, route, mobile, accessibility, reduced-motion, and long-history journeys"
+reqs   = ["55.1-55.8"]
+requires = ["9.2", "14.1"]
+
+[task.14.4]
+title  = "Ion-native Research, Repository, Code, Terminal, Document, Data, and Task applications"
+status = "done"
+wave   = 40
+do_1   = "Build Research Browser search and reader views from real search and semantic browser results with URLs, source identity, citations, navigation, media references, and screenshot-on-demand evidence"
+do_2   = "Build Repository and Code views from provider, browser, project, Git, search, file, diff, diagnostic, revision, branch, and path results"
+do_3   = "Build Terminal and Process views with bounded redacted streaming output, working directory, duration, exit, service, retry, cancellation, and artifact state"
+do_4   = "Build Document, Artifact, Data, Task, and Agent views with provenance, versions, tables, charts, files, assignments, decisions, budgets, blockers, evidence, and criterion coverage"
+do_5   = "Register renderers through the generated display contract, share generic Ion primitives, and preserve an inspectable generic view for absent or incompatible applications"
+do_6   = "Run the renderer matrix against real search, article, GitHub or GitLab, local workspace, code, Git, terminal, process, diff, report, table, artifact, error, unsupported-tool, and screenshot-fallback paths"
+reqs   = ["56.1-56.8"]
+requires = ["10.1", "13.5", "14.2", "14.3"]
+
+[task.14.5]
+title  = "Parallel-agent workspaces, causal aggregation, steering, and takeover leases"
+status = "done"
+wave   = 41
+do_1   = "Project stable parent and sub-agent identities, assignments, applications, actions, status, evidence, budgets, blockers, and artifacts from authoritative task and tool events"
+do_2   = "Implement aggregate and per-agent workspaces with visible foreground inspection, background execution, independent Follow live positions, and causally honest ordering"
+do_3   = "Bind every steering command to an explicit task, agent, tool action, scope, and revision with stale, contradictory, cross-scope, and unauthorized rejection"
+do_4   = "Implement browser and terminal takeover leases that coordinate the owning executor, show authority and expiry, and reconcile control without duplicated effects or hidden automation"
+do_5   = "Test simultaneous tool calls, agent switching, historical inspection, stale steering, approval routing, cancellation, takeover expiry, child failure, parent restart, duplicates, and final synthesis"
+reqs   = ["57.1-57.6"]
+requires = ["5.1", "14.4"]
+
+[task.14.6]
+title  = "Computer security, privacy, attribution, accessibility, and performance hardening"
+status = "pending"
+wave   = 41
+do_1   = "Enforce inert rendering, safe URL and media policy, origin isolation, server-side actor and workspace authorization, and prompt-injection data boundaries"
+do_2   = "Redact secrets and protected content before client delivery across events, display models, screenshots, caches, exports, diagnostics, and share paths"
+do_3   = "Bind approval and consequence surfaces to the real operation, target, data movement, scope, status, and authoritative policy record"
+do_4   = "Publish and enforce event, delta, payload, retention, screenshot, memory, CPU, render, replay, reconnect, and slow-client budgets with terminal evidence preserved"
+do_5   = "Retain source identity, URL, capture time, revision, and truth classification so Ion-native views cannot be mistaken for original external interfaces"
+do_6   = "Run adversarial injection, markup, media, terminal escape, secret, cross-scope, stale authorization, forged event, flood, screenshot, attribution, accessibility, and performance suites"
+reqs   = ["58.1-58.7"]
+requires = ["10.2", "14.2", "14.3"]
+
+[task.14.7]
+title  = "Real GitHub-analysis production journey and Phase 14 anti-theater gate"
+status = "pending"
+wave   = 42
+do_1   = "Run one real repository-analysis request through search, browsing, repository navigation, code inspection, bounded commands or analysis, optional parallel agents, artifact creation, and report review"
+do_2   = "Correlate every visible application transition, datum, status, failure, artifact, and completion claim to durable production events and criterion evidence"
+do_3   = "Prove refresh, route change, disconnect, reconnect, daemon restart, snapshot and gap recovery, duplicates, out-of-order completion, agent failure, history inspection, and Back to live"
+do_4   = "Run the complete renderer, approval, denial, incomplete, uncertain, unsupported-tool, screenshot, mobile, keyboard, screen-reader, reduced-motion, security, and attribution matrix"
+do_5   = "Publish reference-hardware event-to-projection, interaction, replay, memory, payload, long-run, event-flood, and slow-viewer performance evidence"
+do_6   = "Reconcile Phase 14 status only after production binaries and real clients prove every criterion with zero visual activity lacking an authoritative source event"
+do_7   = "Prove the same Ion identity, memory, relationship, policy, goals, approvals, and execution continuity before, during, and after software, research, data, document, and communication work"
+reqs   = ["59.1-59.7"]
+requires = ["13.9", "14.4", "14.5", "14.6"]
+
+[task.14.8]
+title  = "Search-first public research reliability repair"
+status = "done"
+wave   = 42
+do_1   = "Default public research to https://browsingmachine.com/ while preserving explicit ION_SEARCH_ENDPOINT and legacy SEARXNG_URL deployment overrides"
+do_2   = "Return bounded ranked source metadata, automatically try one news-category fallback when default general engines return no results, and report explicit upstream-engine degradation instead of raw HTML or silent empty results"
+do_3   = "Instruct the production agent to search before semantic fetch or native browsing, treat SearXNG fallback as part of one search call, and avoid repeated degraded queries or guessed direct URLs"
+do_4   = "Test default readiness, result normalization, degraded-engine reporting, and production research context"
+reqs   = ["56.9"]
+requires = ["14.4"]
+
+[task.14.9]
+title  = "Tavily-first research routing and native Computer presentation"
+status = "done"
+wave   = 42
+do_1   = "Load a bounded Tavily credential and endpoint through the restricted production environment and make Tavily the primary web_search provider"
+do_2   = "Preserve SearXNG as an automatic bounded fallback with explicit provider, category, degradation, and fallback metadata"
+do_3   = "Route ordinary research through structured search and selected semantic fetch while reserving native browser or graphical computer use for direct interaction, authentication, downloads, visual inspection, JavaScript-only pages, or insufficient earlier layers"
+do_4   = "Project the Tavily overview, provider state, ranked URLs, snippets, publication dates, source domains, and relevance into the inert Ion-native Research application"
+do_5   = "Add normalization, routing, environment, display-model, and UI test source and verify static builds without executing tests"
+reqs   = ["56.1", "56.6-56.9", "61.4"]
+requires = ["14.4", "14.8"]
+
+[task.15]
+section = "Phase 15 — Agent-Scoped Scheduling"
+title   = "Per-agent Chronos scheduling, durable wake-up, and operator control"
+status  = "pending"
+
+[task.15.1]
+title  = "Adapt Chronos into the encrypted per-agent production runtime"
+status = "done"
+wave   = 43
+do_1   = "Adapt once, absolute, cron, descriptor, interval, timezone, owner scope, idempotency, claim, retry, and skip-advance semantics without the central Postgres or router services"
+do_2   = "Persist alarm content in actor-scoped encrypted state and recover due, claimed, failed, cancelled, and recurring alarms across daemon restart"
+do_3   = "Register direct create, list, inspect, and cancel tools and inject due wakes through idempotent authenticated production turns"
+do_4   = "Project agent-created schedules separately from internal presence maintenance and expose truthful status, next fire, last fire, failure, and safe error state"
+do_5   = "Test actor isolation, encryption, calculations, idempotency, claims, retries, cancellation, exact-once wake, recurring advancement, restart recovery, policy continuity, and live clients"
+reqs   = ["60.1-60.7"]
+requires = ["7.1", "8.1", "9.1"]
+
+[task.16]
+section = "Phase 16 — Private Agent Computer and Railway Deployment"
+title   = "Unprivileged Personal and Clean Linux Desktops, Live Takeover, and Portable One-Click Hosting"
+status  = "pending"
+
+[task.16.1]
+title  = "Private Computer contracts, lifecycle, and deployment topology"
+status = "done"
+wave   = 44
+do_1   = "Define versioned host, session, capability, lifecycle, authority, persistence-mode, budget, compatibility, and reconciliation contracts"
+do_2   = "Bind every privileged request to installation, actor, Ion session, task or outcome, agent, computer session, operation, resource, authority revision, expiry, idempotency, and replay protection"
+do_3   = "Define legal Personal and Clean lifecycle transitions, explicit degraded and unavailable states, artifact-before-destroy gating, and orphan recovery"
+do_4   = "Define the two-service Ion and ion-computer topology, authenticated private channel, public stream proxy, volumes, secrets, health, restart, rollback, export, and cost boundaries"
+do_5   = "Record the native-tool-to-graphical-fallback hierarchy and canonical ComputerEvent, ToolEvent, lease, policy, artifact, and evidence correlation without a second completion truth"
+do_6   = "Test strict validation, negotiation, transitions, idempotent replay, stale authority, cross-scope isolation, bounded serialization, topology invariants, and restart reconciliation"
+reqs   = ["61.1-61.7"]
+requires = ["14.1", "14.3", "14.5", "14.8"]
+
+[task.16.2]
+title  = "Unprivileged Linux desktop host and Personal/Clean lifecycle"
+status = "pending"
+wave   = 45
+do_1   = "Build a version-pinned non-root Linux desktop image with browser, terminal, files, approved applications, read-only base, dropped capabilities, scoped mounts, and explicit capability probes"
+do_2   = "Implement authenticated provision, start, stop, suspend, resume, rebuild, destroy, inspect, and reconcile operations through the versioned host contract"
+do_3   = "Implement actor-scoped Personal volumes and cryptographically fresh Clean workspaces with independent resource, storage, idle, session, and egress budgets"
+do_4   = "Gate Clean destruction on authoritative artifact export and cleanup evidence and implement orphan, partial-cleanup, restart, storage-exhaustion, and unavailable recovery"
+do_5   = "Expose browser, terminal, filesystem, screenshot, pointer, keyboard, clipboard, stream, protected-secret-entry, and approved-application capabilities without a public control port"
+do_6   = "Run real container lifecycle, persistence, freshness, cleanup, isolation, budget, restart, and hostile-download tests without privileged mode"
+reqs   = ["61.1-61.7", "62.1-62.7", "65.1-65.5"]
+requires = ["10.1", "13.1", "16.1"]
+
+[task.16.3]
+title  = "Live desktop session transport and Ion Computer renderer"
+status = "pending"
+wave   = 46
+do_1   = "Implement separate short-lived view and input tickets plus authenticated bounded desktop transport through the Ion control plane"
+do_2   = "Render a real private_desktop application inside the existing ComputerStage with isolated untrusted pixels and no raw daemon access from the browser"
+do_3   = "Add explicit Computer management route for setup, readiness, mode, applications, sessions, resource use, storage, and recovery while preserving idle embedded-computer visibility"
+do_4   = "Make the active desktop dominant beside persistent conversation and evidence, preserve Follow live, history, full-screen, mobile mounted-state switching, keyboard, screen reader, and reduced motion"
+do_5   = "Implement bounded Railway-compatible reconnect, replay cursors, duplicate suppression, route and refresh survival, and truthful disconnected, recovering, failed, and unavailable states"
+do_6   = "Run real service and browser tests proving authenticated frames, event correlation, reconnect, restart, mobile, accessibility, and zero fabricated activity"
+reqs   = ["63.1-63.2", "63.5", "63.7-63.8"]
+requires = ["14.2", "14.3", "16.2"]
+
+[task.16.4]
+title  = "Lease-based takeover, credential boundaries, and restart recovery"
+status = "pending"
+wave   = 47
+do_1   = "Route Pause, Take control, Renew, Return control, Stop, and Rebuild through production policy, idempotency, audit, and exact browser or desktop leases"
+do_2   = "Coordinate the executor at explicit action boundaries with no hidden automation under operator control and reconcile screen, application, task, and authority state before resuming"
+do_3   = "Implement protected secret entry with screenshot, clipboard, event, log, and model-observation suppression and an explicit safe exit"
+do_4   = "Reconcile stale, lost, expired, duplicated, and restart-surviving leases without duplicate pointer, keyboard, browser, terminal, or clipboard effects"
+do_5   = "Expose Ion has control, You have control, and Control reconciling with precise expiry, needs-help, and unavailable consequences"
+do_6   = "Run real takeover, renewal, expiry, secret-entry, reconnect, control-plane restart, computer-host restart, and duplicate-safe resume journeys"
+reqs   = ["63.2-63.8", "65.2", "65.4-65.5"]
+requires = ["10.2", "14.5", "16.3"]
+
+[task.16.5]
+title  = "Railway one-click packaging, onboarding, health, and rollback"
+status = "pending"
+wave   = 47
+do_1   = "Build version-pinned Ion and ion-computer images plus a multi-service Railway template with only Ion public and no privileged runtime requirement"
+do_2   = "Configure authenticated dual-stack private networking, generated or sealed secrets, write-only provider references, explicit ports, public origin policy, and optional HNSW"
+do_3   = "Add Ion data and optional Personal workspace volumes with non-root ownership, start-time migrations, capacity checks, backups, export, restore, and redeploy-downtime guidance"
+do_4   = "Add liveness, readiness, compatibility, migration, continuous monitoring, restart, rollback, single-writer, serverless-sleep, and unavailable reconciliation"
+do_5   = "Add Railway-compatible bounded WebSocket reconnect and replay plus declared CPU, memory, storage, egress, idle, and cost projections before persistent compute"
+do_6   = "Test a fresh template locally and, only with explicit authorization, on Railway through ready or specific unavailable onboarding, rollback, restart, export, and non-lock-in migration"
+reqs   = ["64.1-64.8", "65.1-65.2", "65.7-65.8"]
+requires = ["9.5", "16.2"]
+
+[task.16.6]
+title  = "Private Computer security, cleanup, performance, and production acceptance"
+status = "pending"
+wave   = 48
+do_1   = "Enforce least privilege, authenticated and rate-limited APIs, bounded egress, hostile-content containment, secret redaction, scoped volumes, and fail-closed platform capability checks"
+do_2   = "Run adversarial page, download, clipboard, terminal, cross-actor, cross-mode, stale-ticket, replay, lost-lease, reconnect-storm, orphan, exhaustion, storage, cleanup, version, and restart suites"
+do_3   = "Run the complete production journey from SearXNG-first research through graphical fallback, live desktop, needs-help takeover, duplicate-safe resume, verified artifact, restart, Personal retention, and Clean destruction"
+do_4   = "Publish image provenance and reference hardware, Railway plan, readiness, frame, input, reconnect, replay, CPU, memory, storage, egress, long-run, cleanup, and failure measurements"
+do_5   = "Prove first-contact preferred-name retention and the same Ion identity, memory, relationship, policy, approval, task, event, artifact, and evidence continuity across the complete journey"
+do_6   = "Reconcile Phase 16 status only after current production binaries, clients, container runtime, and authorized deployment evidence satisfy every criterion with unresolved platform boundaries visible"
+reqs   = ["62.7", "63.8", "65.1-65.8"]
+requires = ["14.6", "14.7", "16.4", "16.5"]
+
+[task.16.7]
+title  = "Deployment username and password authentication"
+status = "pending"
+wave   = 35
+do_1   = "Add validated deployment username plus plaintext-password or Argon2id-hash configuration with startup derivation, zeroization, no credential persistence, and fail-closed Railway and non-loopback behavior"
+do_2   = "Implement exact-origin bounded login, generic constant-time verification, bounded throttling, authenticated status, logout, short-lived signed session cookies, CSRF binding, and credential invalidation"
+do_3   = "Gate the mounted SPA and every operator API behind authentication while preserving loopback-only local development and exposing no actor bootstrap or session credential before login"
+do_4   = "Build an accessible restrained login and logout experience and document secure Railway, Compose, container, and systemd variable configuration without hardcoded credentials"
+do_5   = "Verify static contracts and production builds, then run authentication, browser, security, restart, and deployment acceptance only when test and restart authorization is available"
+reqs   = ["67.1-67.7"]
+requires = ["1.2", "9.2", "16.1"]
+
+[task.17]
+section = "Phase 17 — Image and Video Generation Studio"
+title   = "Secure Provider-Backed Media Creation, Editing, Durable Jobs, and Local Assets"
+status  = "pending"
+
+[task.17.1]
+title  = "Mounted Novita image and video generation studio"
+status = "pending"
+wave   = 35
+do_1   = "Implement a replaceable Novita V3 adapter for text and image generation, text and image video generation, inpainting, cleanup, background tools, text removal, face merge, and upscaling"
+do_2   = "Persist actor-scoped encrypted requests, provider task correlation, progress, safe failures, restart reconciliation, and bounded locally owned output assets"
+do_3   = "Expose authenticated same-origin status, list, create, inspect, asset, download, and delete APIs with CSRF, origin, payload, media, and SSRF enforcement"
+do_4   = "Build and mount a responsive accessible Media Studio with task-specific controls, uploads and masks, previews, job progress, generation history, playback, downloads, retry, and unconfigured guidance"
+do_5   = "Generate contracts and production assets, then verify static, security, restart, provider, browser, accessibility, and end-to-end behavior without false completion"
+reqs   = ["66.1-66.7"]
+requires = ["1.2", "9.2", "13.1", "14.3"]
+
+# --- OFFICE STUDIO ---
+
+[req.68]
+title = "Encrypted agent-native Office Studio with ONLYOFFICE editing"
+story = "As a user, I want a first-class document, spreadsheet, presentation, and PDF studio inside Ion, so that I can create, edit, version, and manage office documents with the same identity, encryption, and agent capabilities as every other Ion workflow."
+ac_1  = "THE mounted Office Studio SHALL provide real document, spreadsheet, presentation, PDF/form, template, upload, library, editor, version, restore, archive, download and export workflows with accessible responsive states."
+ac_2  = "ION is the canonical actor-scoped document manager and storage service; every committed version is encrypted at rest, content-hashed, immutable, bounded and durable across browser and daemon restart."
+ac_3  = "A replaceable OfficeEngine contract separates Ion from ONLYOFFICE-specific editor configuration, health, force-save, disconnect, conversion and compatibility behavior."
+ac_4  = "Browser operations require the authenticated Ion actor, exact origin and CSRF for mutations; engine configurations, callbacks, downloads and commands use short-lived scoped tokens and validated JWTs without exposing shared secrets."
+ac_5  = "Save callbacks are bounded, authenticated, idempotent and restart-safe; Ion validates and durably commits a downloaded version before acknowledging success, and duplicate, stale, uncertain or failed saves remain honest."
+ac_6  = "Imports and exports validate supported extensions, MIME signatures, OOXML archive structure, decompression bounds, macros, embedded content and maximum sizes; macro-enabled or dangerous documents are quarantined or opened read-only."
+ac_7  = "Agent office operations preserve the same Ion identity, memory, task, approval, evidence and artifact boundaries; selected content is sent only by explicit user action and proposed document mutations remain reviewable."
+ac_8  = "THE editor is mounted through a same-origin WebSocket-capable proxy or another explicitly configured secure origin; direct unauthenticated document-server exposure and arbitrary proxy targets are prohibited."
+ac_9  = "COMPOSE, Railway, Kubernetes and Helm packaging use a pinned configurable ONLYOFFICE image, private networking, sealed JWT secret, health checks, persistent operational storage, graceful save/disconnect behavior and documented resource requirements."
+ac_10 = "COMMUNITY branding, AGPL obligations, connection limits and unavailable commercial features remain visible; the domain must support later Developer or hosted engines without data migration."
+ac_11 = "PRODUCTION acceptance covers real DOCX, XLSX, PPTX and PDF journeys, JWT/origin/CSRF denial, cross-actor isolation, callback replay, restart, WebSocket reconnect, malicious files, version restore, backup, export and artifact verification."
+ac_12 = "NO Office task is marked complete from source presence, an iframe rendering, HTTP 200, simulated callbacks, screenshots or model claims."
+
+[task.18]
+section = "Phase 18 — Office Studio"
+title   = "Encrypted Agent-Native Office Studio with ONLYOFFICE Editing"
+status  = "pending"
+
+[task.18.1]
+title  = "Office Studio: models, engine contract, storage, API, proxy, UI, deployment, and test source"
+status = "pending"
+wave   = 35
+do_1   = "Implement Office domain models, encrypted SQLite store, version service, and bundled OOXML templates"
+do_2   = "Implement OfficeEngine contract, ONLYOFFICE adapter, signed file URLs, callback validation, and reconciliation"
+do_3   = "Implement authenticated Office HTTP handlers, same-origin reverse proxy, and control-plane operations"
+do_4   = "Add agent tools with bounded inspection, proposal types, and verified artifact registration"
+do_5   = "Build Office Studio route with library, real editor host, and honest failure states"
+do_6   = "Add Compose, Railway, Kubernetes, and Helm packaging with pinned images and private networking"
+do_7   = "Add documentation, generated docs, and complete test source without executing tests"
+do_8   = "Verify static builds and typechecks only; leave task in_progress because live tests are prohibited"
+reqs   = ["68.1-68.12"]
+requires = ["1.2", "9.2", "13.1", "14.3"]

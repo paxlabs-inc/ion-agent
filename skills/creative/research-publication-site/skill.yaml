@@ -1,0 +1,100 @@
+skill:
+  name: research-publication-site
+  version: 1.0.0
+  summary: "Multi-page research publication site — auto-parse academic papers, category filters, paper pages"
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [research site, publication site, academic site, papers site, research lab website, research docs]
+  intents: [build_research_site, host_papers, create_publication_site]
+  patterns:
+    - "(build|create|make) .*(research|publication|academic) .*(site|website)"
+    - "(host|publish) .*(papers|publications|research)"
+    - "research lab .*(website|site)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [research_sites, paper_auto_parsing, category_filters, academic_layouts]
+  output_types: [.html, .css, .js]
+
+actions:
+
+  build_research_architecture:
+    description: Build multi-page research site with paper hosting
+    trigger_phrases: ["build research site", "set up publication site", "create paper hosting"]
+    rules:
+      - priority: CRITICAL
+        text: "Architecture: index.html (home), research.html (paper listing with filters), about.html, paper-<slug>.html (auto-generated per paper), css/style.css, js/main.js."
+      - priority: HIGH
+        text: "This is a specialized variant of premium-website for text-heavy academic content. Compose with premium-website for shared CSS/JS patterns."
+      - priority: HIGH
+        text: "Use premium-website's anti-slop principles but adapt for academic tone."
+      - priority: NORMAL
+        text: "Derive paper slugs from title, not filename. Slugs should be human-readable: paper-intent-compiler.html."
+
+  auto_parse_papers:
+    description: Auto-parse academic .txt papers into structured HTML
+    trigger_phrases: ["parse papers", "convert papers to html", "auto-generate paper pages"]
+    rules:
+      - priority: CRITICAL
+        text: "Regex patterns: Roman numeral sections (I. INTRODUCTION → <h3>), alphabetic subsections (A. Scaling Laws → <h4>), ABSTRACT label."
+      - priority: CRITICAL
+        text: "Line-number stripping required — read_file() returns LINE_NUM|content format. Always strip before parsing."
+      - priority: HIGH
+        text: "HTML-escape content before injecting into templates: replace &, <, > for math notation."
+      - priority: HIGH
+        text: "Paper body text MUST use --text-primary (not --text-secondary) for readability on dark backgrounds."
+      - priority: HIGH
+        text: "Do NOT use .reveal on paper content wrapper — IntersectionObserver may not trigger for below-fold content."
+      - priority: NORMAL
+        text: "Use execute_code to loop through papers and auto-generate. Manual writing of 14+ pages is error-prone."
+    data:
+      - key: section_regex
+        string_value: "^([IVX]+\\.\\s+[A-Z][A-Z\\s]+)$"
+      - key: subsection_regex
+        string_value: "^([A-Z]\\.\\s+[A-Z].+)$"
+      - key: abstract_regex
+        string_value: "^(ABSTRACT|Abstract|INDEX TERMS|Index Terms)$"
+    examples:
+      - label: "paper parsing regex patterns"
+        language: python
+        code: |
+          import re
+          # Section headers
+          content = re.sub(r'^([IVX]+\.\s+[A-Z][A-Z\s]+)$', r'\n<h3 class="paper-section">\1</h3>', content, flags=re.MULTILINE)
+          # Subsection headers
+          content = re.sub(r'^([A-Z]\.\s+[A-Z].+)$', r'\n<h4 class="paper-subsection">\1</h4>', content, flags=re.MULTILINE)
+          # Line-number stripping
+          lines = [re.match(r'^\d+\|(.*)$', l).group(1) if re.match(r'^\d+\|(.*)$', l) else l for l in content.split('\n')]
+
+  build_research_listing:
+    description: Build filterable paper listing page with category system
+    trigger_phrases: ["paper listing", "category filters", "research listing page"]
+    rules:
+      - priority: HIGH
+        text: "Group papers into 4-7 research areas. Use data-cat attributes + JS filtering."
+      - priority: HIGH
+        text: "Paper cards: grid layout with number, title, abstract excerpt, tags, arrow. Hover transitions."
+      - priority: NORMAL
+        text: "Filter buttons need smaller font/padding at 768px mobile breakpoint."
+    data:
+      - key: optimal_categories
+        string_value: "4-7 categories (fewer makes filters pointless, more clutters UI)"
+
+guardrails:
+  - text: "Always strip line numbers from read_file() output before parsing papers"
+    scope: ALWAYS
+  - text: "Paper body text must use --text-primary for dark background readability"
+    scope: ALWAYS
+  - text: "HTML-escape all paper content before template injection"
+    scope: ALWAYS
+
+related: []

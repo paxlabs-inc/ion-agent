@@ -1,0 +1,127 @@
+skill:
+  name: ai-image-generation
+  version: 1.0.0
+  summary: Generate brand-consistent images with AI providers — reference analysis, palette extraction, prompt engineering
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [image generation, AI image, brand palette, xAI Grok, FAL, prompt engineering]
+  intents: [generate_image, analyze_reference, extract_palette]
+  patterns:
+    - "(generate|create|make) .*(image|illustration|picture)"
+    - "(brand|color) .*(palette|extraction)"
+    - "(reference|style) .*(image|analysis)"
+
+requires:
+  env_any: [XAI_API_KEY, FAL_KEY]
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+  binaries: [ffprobe, ffmpeg]
+
+provides:
+  capabilities: [image_generation, vision_analysis, brand_palette_extraction, style_reference]
+  output_types: [.png, .jpg]
+
+actions:
+
+  analyze_reference:
+    description: Examine reference images before generating — extract style DNA
+    trigger_phrases: ["analyze reference", "extract style", "examine image"]
+    rules:
+      - priority: CRITICAL
+        text: "ALWAYS examine reference images before generating — never infer style from text alone"
+      - priority: HIGH
+        text: "If vision_analyze tool available, use it; otherwise fall back to xAI API via execute_code"
+      - priority: HIGH
+        text: "Use grok-4.5 for vision — do NOT use grok-2-vision (unavailable)"
+      - priority: NORMAL
+        text: "Describe visual style: colors, composition, typography, textures, lighting, materials, mood"
+    data:
+      - key: vision_models
+        list_value:
+          items: [{ string_value: "grok-4.5" }, { string_value: "grok-4.3" }]
+      - key: banned_vision_model
+        string_value: "grok-2-vision"
+
+  extract_palette:
+    description: Identify actual brand colors before generating
+    trigger_phrases: ["extract palette", "find brand colors", "get color palette"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER use generic template colors or guess — fetch actual brand token file"
+      - priority: HIGH
+        text: "Priority: brand kit repo → design tokens files → ask user for hex codes"
+      - priority: NORMAL
+        text: "Search for *tokens*, *colors*, *palette* files in the project"
+    data:
+      - key: priority_order
+        list_value:
+          items:
+            - { string_value: "brand kit repo (e.g. GitHub raw URL)" }
+            - { string_value: "design tokens files in project" }
+            - { string_value: "ask user for hex codes" }
+
+  build_prompt:
+    description: Structure image generation prompts with style, subject, colors, composition
+    trigger_phrases: ["build prompt", "write prompt", "craft prompt"]
+    rules:
+      - priority: HIGH
+        text: "Structure: art style/technique first, then subject, exact colors, composition, materials, lighting, exclusions"
+      - priority: HIGH
+        text: "Include explicit exclusions ('No gradients, no 3D' when appropriate)"
+      - priority: NORMAL
+        text: "Use hex codes from brand palette for exact colors"
+    data:
+      - key: prompt_structure
+        list_value:
+          items:
+            - { string_value: "art style/technique" }
+            - { string_value: "subject/content" }
+            - { string_value: "exact colors (hex)" }
+            - { string_value: "composition notes" }
+            - { string_value: "materials/textures" }
+            - { string_value: "lighting" }
+            - { string_value: "explicit exclusions" }
+
+  generate:
+    description: Generate images using image_generate tool
+    trigger_phrases: ["generate image", "create image", "make image"]
+    rules:
+      - priority: HIGH
+        text: "Generate 3-5 variations per batch for user to choose from"
+      - priority: HIGH
+        text: "Default aspect ratio: landscape (16:9) unless specified"
+      - priority: NORMAL
+        text: "All images in a batch should explore different subjects/compositions within same style"
+    data:
+      - key: default_aspect
+        string_value: "landscape"
+      - key: variations_per_batch
+        int_value: 5
+
+  video_style_analysis:
+    description: Extract frames from video and analyze for style reference
+    trigger_phrases: ["analyze video style", "video reference", "extract video frames"]
+    rules:
+      - priority: HIGH
+        text: "Extract frames with ffmpeg before analyzing — never ask user to describe a video"
+      - priority: NORMAL
+        text: "Use 1fps for short videos, 0.5fps for longer; scale to 1024px"
+    data:
+      - key: frame_extraction_command
+        string_value: "ffmpeg -y -i input.mp4 -vf \"fps=1,scale=1024:-1\" /tmp/ref_frame_%02d.png"
+
+guardrails:
+  - text: "Never guess brand colors from template files — always fetch actual brand token file"
+    scope: ALWAYS
+  - text: "Never generate without analyzing references first when user provides them"
+    scope: ALWAYS
+  - text: "API key redaction: use Python open() in execute_code to read .env values"
+    scope: READ_OPS
+
+related: []

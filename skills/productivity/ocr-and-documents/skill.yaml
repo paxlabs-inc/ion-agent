@@ -1,0 +1,172 @@
+skill:
+  name: ocr-and-documents
+  version: 2.3.0
+  summary: Extract text from PDFs and scans using pymupdf or marker-pdf
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [pdf, ocr, extract text, scanned document, pymupdf, marker-pdf, arxiv, text extraction, document parsing]
+  intents: [pdf_extract, pdf_ocr, pdf_to_markdown, pdf_split, pdf_merge, pdf_search, scan_extract]
+  patterns:
+    - "(extract|read|parse|convert) .*(pdf|PDF|scan|document)"
+    - "(ocr|text extraction) .*(pdf|scan|image)"
+    - "arxiv .*(pdf|paper|paper)"
+    - "(split|merge|search) .*(pdf|PDF)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [python3]
+
+provides:
+  capabilities: [pdf_text_extraction, pdf_ocr, pdf_markdown, pdf_tables, pdf_images, pdf_split_merge, pdf_search, arxiv_extraction]
+  output_types: [.md, .json, .txt, .pdf]
+
+actions:
+
+  extract_url:
+    description: Extract content from a PDF URL using web_extract
+    trigger_phrases: ["extract pdf from url", "read pdf online", "download and extract pdf"]
+    rules:
+      - priority: CRITICAL
+        text: "ALWAYS try web_extract first when document has a URL — handles PDF-to-markdown via Firecrawl with no local deps"
+      - priority: HIGH
+        text: "Only use local extraction when: file is local, web_extract fails, or batch processing needed"
+    examples:
+      - label: "extract arxiv paper"
+        language: bash
+        code: "web_extract(urls=[\"https://arxiv.org/pdf/2402.03300\"])"
+
+  extract_pymupdf:
+    description: Extract text/tables/images from PDF using pymupdf (lightweight)
+    trigger_phrases: ["extract pdf text", "read pdf", "pdf to text", "pdf to markdown"]
+    rules:
+      - priority: CRITICAL
+        text: "Use pymupdf as safe default — instant, no models, ~25MB, works everywhere"
+      - priority: HIGH
+        text: "pymupdf does NOT support OCR, equations, forms, or complex layout analysis"
+      - priority: HIGH
+        text: "For OCR, scanned docs, equations, or complex layouts → use marker-pdf instead"
+    data:
+      - key: install_command
+        string_value: "pip install pymupdf pymupdf4llm"
+      - key: capabilities
+        map_value:
+          entries:
+            text: { bool_value: true }
+            ocr: { bool_value: false }
+            tables: { bool_value: true }
+            equations: { bool_value: false }
+            images: { bool_value: true }
+            markdown: { bool_value: true }
+    examples:
+      - label: "extract as markdown"
+        language: bash
+        code: "python scripts/extract_pymupdf.py document.pdf --markdown"
+      - label: "extract specific pages"
+        language: bash
+        code: "python scripts/extract_pymupdf.py document.pdf --pages 0-4"
+      - label: "inline extraction"
+        language: bash
+        code: |
+          python3 -c "
+          import pymupdf
+          doc = pymupdf.open('document.pdf')
+          for page in doc:
+              print(page.get_text())
+          "
+
+  extract_marker:
+    description: Extract text from PDF using marker-pdf (high-quality OCR)
+    trigger_phrases: ["ocr pdf", "extract scanned pdf", "high quality pdf extraction"]
+    rules:
+      - priority: CRITICAL
+        text: "marker-pdf requires ~3-5GB (PyTorch + models) — check disk space first with scripts/extract_marker.py --check"
+      - priority: HIGH
+        text: "Supports 90+ languages for OCR, tables, equations, code blocks, forms, header/footer removal"
+      - priority: HIGH
+        text: "Speed: ~1-14s/page CPU, ~0.2s/page GPU"
+      - priority: NORMAL
+        text: "Models download ~2.5GB to ~/.cache/huggingface/ on first use"
+    data:
+      - key: install_command
+        string_value: "pip install marker-pdf"
+      - key: capabilities
+        map_value:
+          entries:
+            text: { bool_value: true }
+            ocr: { bool_value: true }
+            tables: { bool_value: true }
+            equations: { bool_value: true }
+            images: { bool_value: true }
+            markdown: { bool_value: true }
+            languages: { int_value: 90 }
+    examples:
+      - label: "extract as markdown"
+        language: bash
+        code: "python scripts/extract_marker.py document.pdf"
+      - label: "extract with JSON output"
+        language: bash
+        code: "python scripts/extract_marker.py document.pdf --json"
+      - label: "batch via CLI"
+        language: bash
+        code: "marker /path/to/folder --workers 4"
+
+  split_merge:
+    description: Split, merge, or search within PDFs using pymupdf
+    trigger_phrases: ["split pdf", "merge pdfs", "search pdf text", "combine pdfs"]
+    rules:
+      - priority: HIGH
+        text: "pymupdf handles split, merge, search natively — no extra dependencies"
+      - priority: NORMAL
+        text: "Use execute_code or inline Python for these operations"
+    examples:
+      - label: "split pages 1-5"
+        language: python
+        code: |
+          import pymupdf
+          doc = pymupdf.open("report.pdf")
+          new = pymupdf.open()
+          for i in range(5):
+              new.insert_pdf(doc, from_page=i, to_page=i)
+          new.save("pages_1-5.pdf")
+      - label: "merge multiple PDFs"
+        language: python
+        code: |
+          import pymupdf
+          result = pymupdf.open()
+          for path in ["a.pdf", "b.pdf", "c.pdf"]:
+              result.insert_pdf(pymupdf.open(path))
+          result.save("merged.pdf")
+      - label: "search text across pages"
+        language: python
+        code: |
+          import pymupdf
+          doc = pymupdf.open("report.pdf")
+          for i, page in enumerate(doc):
+              results = page.search_for("revenue")
+              if results:
+                  print(f"Page {i+1}: {len(results)} match(es)")
+
+guardrails:
+  - text: "Always try web_extract first for URLs — local extraction is fallback"
+    scope: ALWAYS
+  - text: "pymupdf is safe default — use marker-pdf only when OCR/equations/forms/complex layouts needed"
+    scope: ALWAYS
+  - text: "Check disk space before marker-pdf install — needs ~3-5GB"
+    scope: WRITE_OPS
+  - text: "For Word docs use python-docx (parses structure) — better than OCR"
+    scope: ALWAYS
+  - text: "For PowerPoint see powerpoint skill (uses python-pptx)"
+    scope: ALWAYS
+
+related:
+  - name: powerpoint
+    relationship: composes_with
+    description: For PPTX file handling with python-pptx
+  - name: nano-pdf
+    relationship: composes_with
+    description: For editing PDF text content via natural language

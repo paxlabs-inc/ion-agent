@@ -1,0 +1,176 @@
+meta {
+  name: "github-auth"
+  version: "1.1.0"
+  summary: "GitHub auth setup — HTTPS tokens, SSH keys, gh CLI login"
+  author: "Ion Agent"
+  license: "MIT"
+  platforms: "linux"
+  platforms: "macos"
+  platforms: "windows"
+}
+
+triggers {
+  keywords: "github auth"
+  keywords: "gh auth"
+  keywords: "SSH key"
+  keywords: "personal access token"
+  keywords: "git credentials"
+  keywords: "github token"
+  intents: "github_auth_setup"
+  intents: "github_auth_detect"
+  intents: "github_ssh_setup"
+  intents: "github_token_setup"
+  patterns: "(setup|configure|set up) .*(github|git) .*(auth|token|ssh)"
+  patterns: "(github|git) .*(login|authenticate|credentials)"
+  patterns: "gh auth"
+  patterns: "ssh.*github"
+}
+
+requires {
+  tools {
+    name: "terminal"
+    required: true
+  }
+  binaries: "git"
+}
+
+provides {
+  capabilities: "github_authentication"
+  capabilities: "git_credential_management"
+}
+
+actions {
+  id: "detect_auth"
+  description: "Detect which GitHub auth method is available"
+  trigger_phrases: "check github auth"
+  trigger_phrases: "detect auth method"
+  trigger_phrases: "am I authenticated"
+    rules {
+      text: "Detection order: (1) gh auth status, (2) GITHUB_TOKEN env var, (3) ~/.git-credentials, (4) none"
+      priority: CRITICAL
+    }
+    rules {
+      text: "If gh is installed and authenticated, use gh for everything"
+      priority: HIGH
+    }
+    rules {
+      text: "If gh is installed but not authenticated, guide through gh auth login"
+      priority: HIGH
+    }
+    rules {
+      text: "If no gh, fall back to git-only method (HTTPS token or SSH)"
+      priority: NORMAL
+    }
+    data {
+      key: "detection_script"
+      string_value: "if command -v gh &>/dev/null && gh auth status &>/dev/null; then\n  echo \"AUTH_METHOD=gh\"\nelif [ -n \"$GITHUB_TOKEN\" ]; then\n  echo \"AUTH_METHOD=curl\"\nelif grep -q \"github.com\" ~/.git-credentials 2>/dev/null; then\n  export GITHUB_TOKEN=$(grep \"github.com\" ~/.git-credentials | head -1 | sed 's|https://[^:]*:\\([^@]*\\)@.*|\\1|')\n  echo \"AUTH_METHOD=curl\"\nelse\n  echo \"AUTH_METHOD=none\"\nfi\n"
+    }
+}
+actions {
+  id: "setup_https_token"
+  description: "Set up GitHub authentication via HTTPS personal access token"
+  trigger_phrases: "set up github token"
+  trigger_phrases: "configure personal access token"
+  trigger_phrases: "git credential store"
+    rules {
+      text: "Token is used as the password, NOT the GitHub password — GitHub disabled password auth"
+      priority: CRITICAL
+    }
+    rules {
+      text: "Required scopes: repo (full access), workflow (Actions), read:org (org repos)"
+      priority: CRITICAL
+    }
+    rules {
+      text: "Use 'git config --global credential.helper store' for persistent storage"
+      priority: HIGH
+    }
+    rules {
+      text: "Alternative: 'git config --global credential.helper cache --timeout=28800' for 8-hour in-memory cache"
+      priority: HIGH
+    }
+    rules {
+      text: "Always configure git identity: git config --global user.name / user.email"
+      priority: NORMAL
+    }
+}
+actions {
+  id: "setup_ssh"
+  description: "Set up GitHub authentication via SSH keys"
+  trigger_phrases: "set up SSH key"
+  trigger_phrases: "generate SSH key for github"
+  trigger_phrases: "SSH authentication"
+    rules {
+      text: "Generate ed25519 key: ssh-keygen -t ed25519 -C 'email@example.com'"
+      priority: HIGH
+    }
+    rules {
+      text: "Add public key at https://github.com/settings/keys"
+      priority: HIGH
+    }
+    rules {
+      text: "Test connection: ssh -T git@github.com"
+      priority: HIGH
+    }
+    rules {
+      text: "Rewrite HTTPS to SSH: git config --global url.'git@github.com:'.insteadOf 'https://github.com/'"
+      priority: NORMAL
+    }
+}
+actions {
+  id: "setup_gh_cli"
+  description: "Set up GitHub authentication via gh CLI"
+  trigger_phrases: "gh auth login"
+  trigger_phrases: "set up gh cli"
+  trigger_phrases: "configure gh"
+    rules {
+      text: "Interactive: gh auth login (select GitHub.com → HTTPS → browser auth)"
+      priority: HIGH
+    }
+    rules {
+      text: "Headless: echo '<token>' | gh auth login --with-token"
+      priority: HIGH
+    }
+    rules {
+      text: "Run gh auth setup-git to configure git credentials through gh"
+      priority: NORMAL
+    }
+}
+
+guardrails {
+  text: "Never expose tokens in commands — use env vars or credential helpers"
+  scope: AUTH_OPS
+}
+
+guardrails {
+  text: "Token scopes must include 'repo' for push/PR access and 'workflow' for Actions"
+  scope: AUTH_OPS
+}
+
+guardrails {
+  text: "Check gh auth status before any GitHub API operation"
+  scope: ALWAYS
+}
+
+related {
+  name: "github-pr-workflow"
+  relationship: "composes_with"
+  description: "PR operations require auth"
+}
+
+related {
+  name: "github-code-review"
+  relationship: "composes_with"
+  description: "Review operations require auth"
+}
+
+related {
+  name: "github-issues"
+  relationship: "composes_with"
+  description: "Issue operations require auth"
+}
+
+related {
+  name: "github-repo-management"
+  relationship: "composes_with"
+  description: "Repo operations require auth"
+}

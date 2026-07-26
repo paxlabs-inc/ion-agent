@@ -1,0 +1,17 @@
+apiVersion: v2
+name: ion
+description: Ion — a persistent general agent runtime from MatrixMCL
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://ion.matrixmcl.com
+sources:
+  - https://github.com/paxlabs-inc/ion-agent
+maintainers:
+  - name: MatrixMCL
+    url: https://matrixmcl.com
+keywords:
+  - ai-agent
+  - agent-runtime
+  - go
+icon: https://ion.matrixmcl.com/icon.png

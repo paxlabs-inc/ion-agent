@@ -1,0 +1,116 @@
+skill:
+  name: ion-agent-skill-authoring
+  version: 1.1.0
+  summary: Author in-repo SKILL.md files — frontmatter, validator, structure, and writing-quality principles.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [skill authoring, skill.md, create skill, write skill, skill structure, frontmatter]
+  intents: [create_skill, edit_skill, validate_skill]
+  patterns:
+    - "(create|write|author|edit) .*(skill|SKILL.md)"
+    - "skill .*(structure|frontmatter|validation|authoring)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [skill_authoring]
+  output_types: [SKILL.md]
+
+actions:
+
+  author_skill:
+    description: Create or edit an in-repo SKILL.md file
+    trigger_phrases: ["create a skill", "write a skill", "author skill.md", "new skill"]
+    rules:
+      - priority: CRITICAL
+        text: "Frontmatter must start with --- as first bytes (no leading blank line) and close with \\n---\\n before body"
+      - priority: CRITICAL
+        text: "name field required, lowercase + hyphens, <=64 chars; description required, <=1024 chars, starts with 'Use when'"
+      - priority: HIGH
+        text: "Every in-repo skill should have: version, author, license, metadata.ion.{tags, related_skills}"
+      - priority: HIGH
+        text: "Peer skills in software-development/ sit at 8-14k chars — aim for that range; split bulky content into references/"
+      - priority: HIGH
+        text: "Each ordered step must have a checkable completion criterion"
+      - priority: NORMAL
+        text: "Structure: Title, Overview, When to Use, body sections, Common Pitfalls, Verification Checklist"
+      - priority: NORMAL
+        text: "Use strong leading words (tight loop, tracer bullet, root cause) over long explanations"
+      - priority: NORMAL
+        text: "Prune no-op prose — 'be careful', 'be thorough', 'use best practices' rarely change model behavior"
+    data:
+      - key: directory_pattern
+        string_value: "skills/<category>/<skill-name>/SKILL.md"
+      - key: size_limits
+        map_value:
+          entries:
+            description: { string_value: "<=1024 chars" }
+            name: { string_value: "<=64 chars" }
+            total_file: { string_value: "<=100000 chars" }
+      - key: categories
+        list_value:
+          items:
+            - { string_value: "autonomous-ai-agents" }
+            - { string_value: "creative" }
+            - { string_value: "data-science" }
+            - { string_value: "devops" }
+            - { string_value: "software-development" }
+            - { string_value: "social-media" }
+            - { string_value: "productivity" }
+            - { string_value: "research" }
+    examples:
+      - label: "peer-matched frontmatter"
+        language: yaml
+        code: |
+          ---
+          name: my-skill-name
+          description: Use when <trigger>. <one-line behavior>.
+          version: 1.1.0
+          author: Ion Agent
+          license: MIT
+          metadata:
+            ion:
+              tags: [short, descriptive, tags]
+              related_skills: [other-skill]
+          ---
+
+  validate_skill:
+    description: Validate an existing SKILL.md file against constraints
+    trigger_phrases: ["validate skill", "check skill.md", "verify skill"]
+    rules:
+      - priority: CRITICAL
+        text: "Check content.startswith('---') — any leading whitespace or BOM fails validation"
+      - priority: HIGH
+        text: "Verify name <=64 chars, description <=1024 chars, total <=100000 chars"
+      - priority: HIGH
+        text: "Confirm body exists after closing ---"
+      - priority: NORMAL
+        text: "Check related_skills references resolve in-repo"
+    examples:
+      - label: "local validation script"
+        language: python
+        code: |
+          import yaml, re, pathlib
+          content = pathlib.Path("skills/<cat>/<name>/SKILL.md").read_text()
+          assert content.startswith("---")
+          m = re.search(r'\n---\s*\n', content[3:])
+          fm = yaml.safe_load(content[3:m.start()+3])
+          assert "name" in fm and "description" in fm
+          assert len(fm["description"]) <= 1024
+          assert len(content) <= 100_000
+
+guardrails:
+  - text: "In-repo skills use write_file + git add, NOT skill_manage(action='create')"
+    scope: ALWAYS
+  - text: "No-op prose is forbidden — every line must change agent behavior or be deleted"
+    scope: ALWAYS
+
+related: []

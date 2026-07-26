@@ -1,0 +1,123 @@
+skill:
+  name: youtube-content
+  version: 1.0.0
+  summary: Extract YouTube transcripts and transform into summaries, threads, blogs
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [youtube, transcript, video summary, youtube url, youtu.be, video transcript, summarize video]
+  intents: [youtube_transcript, summarize_video, extract_transcript, video_to_text]
+  patterns:
+    - '(youtube|youtu\.be).*(transcript|summary|summarize|extract)'
+    - '(transcript|summary|summarize) .*(youtube|video)'
+    - 'https?://(www\.)?(youtube\.com|youtu\.be)/'
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [python3, uv]
+
+provides:
+  capabilities: [youtube_transcript_extraction, video_summarization, content_transformation]
+  output_types: [.md, .txt, .json]
+
+actions:
+
+  setup:
+    description: Install youtube-transcript-api dependency
+    trigger_phrases: ["set up youtube tool", "install youtube transcript"]
+    rules:
+      - priority: HIGH
+        text: "Install via: uv pip install youtube-transcript-api"
+    data:
+      - key: install_command
+        string_value: "uv pip install youtube-transcript-api"
+
+  fetch_transcript:
+    description: Extract transcript from a YouTube video
+    trigger_phrases: ["get youtube transcript", "extract transcript", "fetch video transcript", "transcribe this video"]
+    rules:
+      - priority: CRITICAL
+        text: "Accepts standard YouTube URLs, shorts, embeds, live links, or raw 11-char video IDs"
+      - priority: HIGH
+        text: "Use --text-only --timestamps for structured processing"
+      - priority: HIGH
+        text: "If transcript is empty, retry without --language to get any available transcript"
+      - priority: HIGH
+        text: "If still empty, tell user the video likely has transcripts disabled"
+      - priority: NORMAL
+        text: "For transcripts >50K chars, split into ~40K chunks with 2K overlap before summarizing"
+    data:
+      - key: script_path
+        string_value: "SKILL_DIR/scripts/fetch_transcript.py"
+      - key: output_formats
+        list_value:
+          items:
+            - { string_value: "JSON with metadata (default)" }
+            - { string_value: "Plain text (--text-only)" }
+            - { string_value: "With timestamps (--timestamps)" }
+            - { string_value: "Specific language (--language tr,en)" }
+    examples:
+      - label: "JSON output with metadata"
+        language: bash
+        code: |
+          uv run python3 SKILL_DIR/scripts/fetch_transcript.py "https://youtube.com/watch?v=VIDEO_ID"
+      - label: "plain text output"
+        language: bash
+        code: |
+          uv run python3 SKILL_DIR/scripts/fetch_transcript.py "URL" --text-only
+      - label: "with timestamps"
+        language: bash
+        code: |
+          uv run python3 SKILL_DIR/scripts/fetch_transcript.py "URL" --timestamps
+      - label: "specific language with fallback"
+        language: bash
+        code: |
+          uv run python3 SKILL_DIR/scripts/fetch_transcript.py "URL" --language tr,en
+
+  transform_content:
+    description: Transform transcript into structured formats (chapters, summary, thread, blog)
+    trigger_phrases: ["summarize this video", "create chapters", "make a thread from this video", "blog post from video"]
+    rules:
+      - priority: CRITICAL
+        text: "Fetch transcript first, then transform. Default to summary if user doesn't specify format"
+      - priority: HIGH
+        text: "Chapters: group by topic shifts with timestamped chapter list"
+      - priority: HIGH
+        text: "Thread: numbered posts each under 280 chars"
+      - priority: HIGH
+        text: "Verify output for coherence, correct timestamps, and completeness before presenting"
+      - priority: NORMAL
+        text: "Supported formats: chapters, summary, chapter_summaries, thread, blog_post, quotes"
+    data:
+      - key: output_formats
+        map_value:
+          entries:
+            chapters: { string_value: "Group by topic shifts, timestamped chapter list" }
+            summary: { string_value: "5-10 sentence overview" }
+            chapter_summaries: { string_value: "Chapters with short paragraph each" }
+            thread: { string_value: "Twitter/X thread, numbered, <280 chars each" }
+            blog_post: { string_value: "Full article with title, sections, takeaways" }
+            quotes: { string_value: "Notable quotes with timestamps" }
+    examples:
+      - label: "chapters output format"
+        language: text
+        code: |
+          00:00 Introduction — host opens with the problem statement
+          03:45 Background — prior work and why existing solutions fall short
+          12:20 Core method — walkthrough of the proposed approach
+          24:10 Results — benchmark comparisons and key takeaways
+          31:55 Q&A — audience questions on scalability and next steps
+
+guardrails:
+  - text: "Always validate transcript is non-empty before transforming"
+    scope: ALWAYS
+  - text: "Retry without --language flag if no transcript found for requested language"
+    scope: ALWAYS
+  - text: "If dependency missing, run uv pip install youtube-transcript-api and retry"
+    scope: ALWAYS
+
+related: []

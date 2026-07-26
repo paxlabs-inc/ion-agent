@@ -1,0 +1,120 @@
+skill:
+  name: obsidian
+  version: 1.0.0
+  summary: Read, search, create, and edit notes in an Obsidian vault
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [obsidian, vault, obsidian note, markdown note, wikilink]
+  intents: [read_note, search_notes, create_note, edit_note, append_note]
+  patterns:
+    - "(read|open|show) .*(obsidian|vault|note)"
+    - "(search|find|look up) .*(obsidian|vault|note)"
+    - "(create|add|new) .*(obsidian|note)"
+    - "obsidian"
+
+requires:
+  optional_env: [OBSIDIAN_VAULT_PATH]
+  tools:
+    - name: read_file
+      required: true
+    - name: write_file
+      required: true
+    - name: search_files
+      required: true
+    - name: patch
+      required: false
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [obsidian_read, obsidian_write, obsidian_search, obsidian_edit]
+  output_types: [.md]
+
+actions:
+
+  vault_setup:
+    description: Determine and resolve the Obsidian vault path
+    trigger_phrases: ["set up obsidian", "find vault", "obsidian vault path"]
+    rules:
+      - priority: CRITICAL
+        text: "Resolve vault path before calling any file tools — file tools don't expand shell variables"
+      - priority: HIGH
+        text: "Use OBSIDIAN_VAULT_PATH env var, fallback to ~/Documents/Obsidian Vault"
+      - priority: HIGH
+        text: "Paths may include spaces — prefer file tools over shell commands"
+      - priority: NORMAL
+        text: "Use terminal only for resolving/verifying the vault path, then switch to file tools"
+
+  read_note:
+    description: Read a note from the Obsidian vault
+    trigger_phrases: ["read note", "open note", "show note content"]
+    rules:
+      - priority: HIGH
+        text: "Use read_file with resolved absolute path — preferable to cat (provides line numbers and pagination)"
+
+  list_notes:
+    description: List notes in the vault or a subfolder
+    trigger_phrases: ["list notes", "show notes", "what notes exist"]
+    rules:
+      - priority: HIGH
+        text: "Use search_files with target='files' and pattern='*.md' under the vault path"
+      - priority: NORMAL
+        text: "To list a subfolder, search under that subfolder's absolute path"
+
+  search_notes:
+    description: Search note filenames or content
+    trigger_phrases: ["search notes", "find in notes", "grep vault"]
+    rules:
+      - priority: HIGH
+        text: "For filenames: search_files with target='files' and filename pattern"
+      - priority: HIGH
+        text: "For content: search_files with target='content', regex pattern, file_glob='*.md'"
+      - priority: NORMAL
+        text: "Prefer search_files over grep/find/ls"
+
+  create_note:
+    description: Create a new note in the vault
+    trigger_phrases: ["create note", "new note", "add note to vault"]
+    rules:
+      - priority: HIGH
+        text: "Use write_file with resolved absolute path and full markdown content"
+      - priority: HIGH
+        text: "Use [[Note Name]] wikilinks to connect related notes"
+      - priority: NORMAL
+        text: "Prefer write_file over shell heredocs/echo — avoids quoting issues"
+
+  append_note:
+    description: Append content to an existing note
+    trigger_phrases: ["append to note", "add to note", "add section to note"]
+    rules:
+      - priority: HIGH
+        text: "Use patch for anchored append (after a heading, before a known block)"
+      - priority: HIGH
+        text: "For simple append with no stable context, terminal is acceptable"
+      - priority: NORMAL
+        text: "Alternative: read with read_file, then write_file to rewrite the whole note"
+
+  edit_note:
+    description: Make targeted edits to an existing note
+    trigger_phrases: ["edit note", "update note", "modify note"]
+    rules:
+      - priority: HIGH
+        text: "Use patch for focused changes when current content provides stable context"
+      - priority: HIGH
+        text: "Prefer patch over shell text rewriting"
+
+guardrails:
+  - text: "Always resolve vault path before calling file tools — no shell variable expansion in file tools"
+    scope: ALWAYS
+  - text: "Use file tools (read_file, write_file, search_files, patch) over shell commands"
+    scope: ALWAYS
+  - text: "Use [[wikilinks]] for cross-referencing notes"
+    scope: WRITE_OPS
+
+related:
+  - name: apple-notes
+    relationship: alternative_to
+    description: "Apple Notes for iCloud-synced notes on Apple devices"

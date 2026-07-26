@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ion Safety</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">ION / SAFETY RAIL</p>
+        <h1>Integrity console</h1>
+      </div>
+      <span id="status" class="status offline">offline</span>
+    </header>
+    <section class="connect">
+      <label>WebSocket endpoint <input id="endpoint" value="ws://127.0.0.1:8080/safety"></label>
+      <label>Bearer token <input id="token" type="password" autocomplete="off"></label>
+      <button id="connect">Connect</button>
+    </section>
+    <section class="metrics">
+      <article><span>Total events</span><strong id="total">0</strong></article>
+      <article><span>Critical</span><strong id="critical">0</strong></article>
+      <article><span>Last event</span><strong id="last">—</strong></article>
+    </section>
+    <section>
+      <div class="section-title">
+        <h2>Live evidence</h2>
+        <select id="filter"><option value="">All event types</option></select>
+      </div>
+      <ol id="events" class="events"></ol>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>

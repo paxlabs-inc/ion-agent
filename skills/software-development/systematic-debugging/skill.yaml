@@ -1,0 +1,107 @@
+skill:
+  name: systematic-debugging
+  version: 1.1.0
+  summary: 4-phase root cause debugging — understand bugs before fixing.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [debug, debugging, root cause, troubleshoot, investigate bug, systematic debug]
+  intents: [debug_issue, investigate_bug, root_cause_analysis]
+  patterns:
+    - "(debug|investigate|troubleshoot) .*(bug|issue|error|failure|crash)"
+    - "root cause .*(analysis|investigation)"
+    - "(why|how) .*(fail|crash|break|error)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+
+provides:
+  capabilities: [systematic_debugging, root_cause_analysis]
+  output_types: []
+
+actions:
+
+  systematic_debug:
+    description: Follow the 4-phase debugging methodology
+    trigger_phrases: ["debug this", "investigate this bug", "find root cause", "troubleshoot"]
+    rules:
+      - priority: CRITICAL
+        text: "ALWAYS find root cause before attempting fixes — symptom fixes are failure"
+      - priority: CRITICAL
+        text: "NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST — if you haven't completed Phase 1, you cannot propose fixes"
+      - priority: CRITICAL
+        text: "Build a tight feedback loop BEFORE reading code to build a theory — fast, deterministic, agent-runnable, specific to this bug"
+      - priority: HIGH
+        text: "Phase 1 checklist: error messages read, tight loop exists and is red, recent changes identified, evidence gathered, problem isolated"
+      - priority: HIGH
+        text: "Phase 2: minimize reproduction, find working examples, compare against references, identify differences"
+      - priority: HIGH
+        text: "Phase 3: form 3-5 ranked falsifiable hypotheses, test highest-ranked with smallest probe, one variable at a time"
+      - priority: HIGH
+        text: "Phase 4: create failing test FIRST, implement single fix, verify — if 3+ fixes failed, question the architecture"
+      - priority: NORMAL
+        text: "Tag temporary debug logs with unique prefix like [DEBUG-a4f2] so cleanup is a single search"
+    data:
+      - key: phases
+        map_value:
+          entries:
+            phase_1: { string_value: "Root Cause Investigation — read errors, build tight loop, check changes, gather evidence, trace data flow" }
+            phase_2: { string_value: "Pattern Analysis — minimize repro, find working examples, compare, identify differences" }
+            phase_3: { string_value: "Hypothesis and Testing — form ranked hypotheses, test minimally, one variable at a time" }
+            phase_4: { string_value: "Implementation — create failing test, fix root cause, verify" }
+      - key: tight_loop_methods
+        list_value:
+          items:
+            - { string_value: "1. Failing test at the seam that reaches the bug" }
+            - { string_value: "2. HTTP script / curl against dev server" }
+            - { string_value: "3. CLI invocation with fixture input" }
+            - { string_value: "4. Headless browser script (Playwright/Puppeteer)" }
+            - { string_value: "5. Replay a captured trace" }
+            - { string_value: "6. Throwaway harness" }
+            - { string_value: "7. Property / fuzz loop" }
+            - { string_value: "8. Bisection harness for git bisect run" }
+            - { string_value: "9. Differential loop comparing old vs new" }
+      - key: red_flags
+        list_value:
+          items:
+            - { string_value: "Quick fix for now, investigate later" }
+            - { string_value: "Just try changing X and see if it works" }
+            - { string_value: "Skip the test, I'll manually verify" }
+            - { string_value: "I don't fully understand but this might work" }
+            - { string_value: "One more fix attempt (when already tried 2+)" }
+            - { string_value: "Each fix reveals a new problem in a different place" }
+    examples:
+      - label: "build tight feedback loop"
+        language: bash
+        code: |
+          # Run specific failing test
+          pytest tests/test_module.py::test_name -v
+          # Or scripted repro
+          python scripts/repro_bug.py
+          # Or high-repetition flaky repro
+          for i in {1..100}; do pytest tests/test_flake.py::test_name -q || break; done
+
+  multi_component_debug:
+    description: Debug issues in multi-component systems
+    trigger_phrases: ["debug multi-component", "trace data flow", "system-level debug"]
+    rules:
+      - priority: HIGH
+        text: "For each component boundary: log what enters, log what exits, verify env/config propagation, check state at each layer"
+      - priority: HIGH
+        text: "Run once to gather evidence showing WHERE it breaks, THEN analyze, THEN investigate the failing component"
+      - priority: NORMAL
+        text: "Trace data flow upstream until you find the source of the bad value — fix at source, not symptom"
+
+guardrails:
+  - text: "Never propose fixes without completing Phase 1 root cause investigation"
+    scope: ALWAYS
+  - text: "If 3+ fixes failed, stop and question the architecture — don't attempt fix #4"
+    scope: ALWAYS
+
+related: []

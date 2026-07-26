@@ -1,0 +1,131 @@
+skill:
+  name: github-pr-workflow
+  version: 1.1.0
+  summary: GitHub PR lifecycle — branch, commit, open, CI, merge
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [pull request, PR, merge, squash, rebase, CI checks, branch, commit, push]
+  intents: [create_pr, push_branch, monitor_ci, merge_pr, auto_fix_ci, pr_workflow]
+  patterns:
+    - "(create|open|submit) .*(PR|pull request)"
+    - "(merge|squash) .*(PR|pull request)"
+    - "(monitor|check|watch) .*(CI|checks|status)"
+    - "(auto-?fix|fix) .*(CI|build|test) .*(fail|error)"
+    - "pr (create|merge|diff|list|view)"
+
+requires:
+  env_any: [GITHUB_TOKEN]
+  binaries: [git]
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+
+provides:
+  capabilities: [pr_creation, ci_monitoring, pr_merge, auto_fix_ci]
+  output_types: []
+
+actions:
+
+  branch_and_commit:
+    description: Create a branch and make commits
+    trigger_phrases: ["create a branch", "make a commit", "push changes"]
+    rules:
+      - priority: HIGH
+        text: "Branch naming: feat/, fix/, refactor/, docs/, ci/ prefix + description"
+      - priority: HIGH
+        text: "Conventional Commits: type(scope): description. Types: feat, fix, refactor, docs, test, ci, chore, perf"
+      - priority: NORMAL
+        text: "Always fetch and pull main before branching: git fetch origin && git checkout main && git pull"
+
+    data:
+      - key: branch_prefixes
+        list_value:
+          items: [{ string_value: "feat/" }, { string_value: "fix/" }, { string_value: "refactor/" }, { string_value: "docs/" }, { string_value: "ci/" }]
+      - key: commit_types
+        list_value:
+          items: [{ string_value: feat }, { string_value: fix }, { string_value: refactor }, { string_value: docs }, { string_value: test }, { string_value: ci }, { string_value: chore }, { string_value: perf }]
+
+  create_pr:
+    description: Push branch and create a pull request
+    trigger_phrases: ["create PR", "open a pull request", "submit PR"]
+    rules:
+      - priority: CRITICAL
+        text: "Always push before creating PR: git push -u origin HEAD"
+      - priority: HIGH
+        text: "gh: gh pr create --title '...' --body '...' [--draft] [--reviewer user] [--label '...']"
+      - priority: HIGH
+        text: "curl: POST /repos/{o}/{r}/pulls with title, body, head (branch), base (main)"
+      - priority: NORMAL
+        text: "Include 'Closes #N' in body to auto-link issues"
+
+    examples:
+      - label: "create PR with gh"
+        language: bash
+        code: |
+          git push -u origin HEAD
+          gh pr create \
+            --title "feat: add JWT authentication" \
+            --body "## Summary\n- Login/register endpoints\n- JWT token handling\n\nCloses #42" \
+            --reviewer "teammate" \
+            --label "enhancement"
+
+  monitor_ci:
+    description: Check and monitor CI status for a PR
+    trigger_phrases: ["check CI", "CI status", "are checks passing", "monitor CI"]
+    rules:
+      - priority: HIGH
+        text: "gh: gh pr checks [--watch] for polling"
+      - priority: HIGH
+        text: "curl: GET /repos/{o}/{r}/commits/{sha}/status and /commits/{sha}/check-runs"
+      - priority: NORMAL
+        text: "Polling loop: check every 30s, max 10 minutes, break on success/failure/error"
+
+  auto_fix_ci:
+    description: Diagnose and fix CI failures automatically
+    trigger_phrases: ["fix CI", "auto-fix build", "CI is failing", "fix failing tests"]
+    rules:
+      - priority: CRITICAL
+        text: "Auto-fix loop: check status → read logs → fix code → commit → push → re-check (max 3 attempts, then ask user)"
+      - priority: HIGH
+        text: "gh: gh run list --branch <branch>, gh run view <ID> --log-failed"
+      - priority: HIGH
+        text: "curl: GET /repos/{o}/{r}/actions/runs?branch=<branch>, download logs zip"
+      - priority: NORMAL
+        text: "After fixing, always re-verify CI status before declaring success"
+
+  merge_pr:
+    description: Merge a pull request
+    trigger_phrases: ["merge PR", "squash and merge", "merge pull request"]
+    rules:
+      - priority: HIGH
+        text: "gh: gh pr merge --squash --delete-branch (or --auto for auto-merge when green)"
+      - priority: HIGH
+        text: "curl: PUT /repos/{o}/{r}/pulls/<N>/merge with merge_method: squash|merge|rebase"
+      - priority: NORMAL
+        text: "Delete remote branch after merge: git push origin --delete <branch>"
+
+    data:
+      - key: merge_methods
+        list_value:
+          items: [{ string_value: merge }, { string_value: squash }, { string_value: rebase }]
+
+guardrails:
+  - text: "Always verify CI is green before merging"
+    scope: WRITE_OPS
+  - text: "Auto-fix CI loop: max 3 attempts, then escalate to user"
+    scope: ALWAYS
+  - text: "Clean up branches after merge"
+    scope: WRITE_OPS
+
+related:
+  - name: github-auth
+    relationship: composes_with
+    description: Authentication required for all PR operations
+  - name: github-code-review
+    relationship: composes_with
+    description: Review before merge

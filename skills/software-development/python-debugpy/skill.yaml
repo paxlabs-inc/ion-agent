@@ -1,0 +1,124 @@
+skill:
+  name: python-debugpy
+  version: 1.0.0
+  summary: Debug Python via pdb REPL and debugpy remote (DAP).
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos]
+
+triggers:
+  keywords: [python debug, pdb, debugpy, breakpoint, post-mortem, remote debug, dap]
+  intents: [debug_python, pdb_debug, debugpy_attach, post_mortem]
+  patterns:
+    - "(debug|breakpoint|pdb) .*(python|pytest)"
+    - "debugpy"
+    - "post.mortem"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [python3]
+  env_optional: []
+
+provides:
+  capabilities: [python_debugging, remote_debugging]
+  output_types: []
+
+actions:
+
+  pdb_local:
+    description: Use pdb/breakpoint() for local Python debugging
+    trigger_phrases: ["debug python", "add breakpoint", "pdb debug", "python breakpoint"]
+    rules:
+      - priority: HIGH
+        text: "Start with breakpoint() — it is the cheapest thing that works"
+      - priority: HIGH
+        text: "Don't forget to remove breakpoint() before committing — use rg -n 'breakpoint\\(\\)' --type py"
+      - priority: HIGH
+        text: "pdb under pytest-xdist silently does nothing — always use -p no:xdist or -n 0"
+      - priority: NORMAL
+        text: "The interact command is most powerful — import anything, inspect complex objects, call mutating methods"
+      - priority: NORMAL
+        text: "PYTHONBREAKPOINT=0 disables all breakpoint() calls — check env if breakpoint not hitting"
+    data:
+      - key: pdb_commands
+        map_value:
+          entries:
+            next: { string_value: "n (step over)" }
+            step_into: { string_value: "s" }
+            return: { string_value: "r" }
+            continue: { string_value: "c" }
+            list: { string_value: "l / ll" }
+            where: { string_value: "w (stack trace)" }
+            up_down: { string_value: "u / d" }
+            print: { string_value: "p expr / pp expr" }
+            breakpoint: { string_value: "b file:line or b func" }
+            conditional: { string_value: "b file:line, cond" }
+            interact: { string_value: "interact (full Python REPL in scope)" }
+            quit: { string_value: "q" }
+    examples:
+      - label: "local breakpoint"
+        language: python
+        code: |
+          def compute(x, y):
+              result = some_helper(x)
+              breakpoint()           # drops into pdb here
+              return result + y
+
+  debugpy_remote:
+    description: Use debugpy for remote/headless Python debugging
+    trigger_phrases: ["remote python debug", "debugpy attach", "debug running python"]
+    rules:
+      - priority: HIGH
+        text: "For long-lived processes use debugpy; for quick terminal debugging use remote-pdb instead"
+      - priority: HIGH
+        text: "debugpy.listen blocks only if you also call wait_for_client() — without it, execution continues"
+      - priority: HIGH
+        text: "Attach to PID may fail on hardened kernels (ptrace_scope=1) — fix: echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope"
+      - priority: NORMAL
+        text: "For agent-friendly terminal debugging, remote-pdb is cleaner than debugpy DAP"
+    data:
+      - key: setup
+        string_value: "pip install debugpy"
+      - key: listen_pattern
+        string_value: "debugpy.listen(('127.0.0.1', 5678)); debugpy.wait_for_client()"
+      - key: launch_pattern
+        string_value: "python -m debugpy --listen 127.0.0.1:5678 --wait-for-client script.py"
+      - key: attach_pattern
+        string_value: "python -m debugpy --listen 127.0.0.1:5678 --pid <pid>"
+    examples:
+      - label: "debugpy source-edit pattern"
+        language: python
+        code: |
+          import debugpy
+          debugpy.listen(("127.0.0.1", 5678))
+          print("debugpy listening on 5678, waiting for client...", flush=True)
+          debugpy.wait_for_client()
+          debugpy.breakpoint()
+
+  post_mortem:
+    description: Post-mortem debugging on Python exceptions
+    trigger_phrases: ["post-mortem debug", "debug crash", "inspect exception"]
+    rules:
+      - priority: HIGH
+        text: "Use pdb.post_mortem(tb) in an except block to inspect locals at crash site"
+      - priority: NORMAL
+        text: "Or wrap whole script: python -m pdb -c continue script.py — pdb catches the crash"
+    examples:
+      - label: "post-mortem wrapper"
+        language: python
+        code: |
+          import pdb, sys
+          try:
+              run_the_thing()
+          except Exception:
+              pdb.post_mortem(sys.exc_info()[2])
+
+guardrails:
+  - text: "Never commit breakpoint()/set_trace()/debugpy.listen calls"
+    scope: ALWAYS
+  - text: "Always use -p no:xdist when debugging pytest tests"
+    scope: ALWAYS
+
+related: []

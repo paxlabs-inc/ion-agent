@@ -1,0 +1,29 @@
+# Ion systemd environment file.
+# Install to /etc/ion/environment (root-owned, mode 0600).
+
+# Data directory. Must match StateDirectory / --data-dir in the unit.
+ION_DATA_DIR=/var/lib/ion
+
+# Web operator listen address. Plain HTTP must bind loopback.
+ION_WEB_LISTEN=127.0.0.1:4174
+
+# Required when a TLS reverse proxy exposes Ion remotely.
+# ION_WEB_ORIGIN=https://ion.example.com
+# ION_AUTH_USERNAME=operator
+# Set exactly one of the following. Keep this file root-owned with mode 0600.
+# ION_AUTH_PASSWORD=
+# ION_AUTH_PASSWORD_HASH='$argon2id$v=19$m=65536,t=3,p=2$...'
+
+# Tavily-backed structured research with SearXNG fallback.
+# TAVILY_API_KEY=
+# ION_TAVILY_SEARCH_ENDPOINT=https://api.tavily.com/search
+# ION_SEARCH_ENDPOINT=https://browsingmachine.com/
+
+# Optional Office Studio. The JWT file must be root-owned, mode 0600, and
+# contain at least 32 bytes. The callback origin must be reachable from the
+# ONLYOFFICE Document Server.
+# ION_OFFICE_ENABLED=true
+# ION_OFFICE_INTERNAL_URL=http://127.0.0.1:8082
+# ION_OFFICE_PUBLIC_PATH=/office-engine/
+# ION_OFFICE_CALLBACK_ORIGIN=https://ion.example.com
+# ION_OFFICE_JWT_SECRET_FILE=/etc/ion/office-jwt.secret

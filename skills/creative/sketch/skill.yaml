@@ -1,0 +1,107 @@
+skill:
+  name: sketch
+  version: 1.0.0
+  summary: "Throwaway HTML mockups — 2-3 design variants to compare visual directions"
+  author: Ion Agent (adapted from gsd-build/get-shit-done)
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [sketch, mockup, design variant, prototype, wireframe, UI exploration, design comparison]
+  intents: [create_mockups, compare_designs, explore_ui_directions]
+  patterns:
+    - "(sketch|mockup|prototype) .*(screen|ui|page|layout)"
+    - "(show|compare) .*(variants|designs|takes|directions)"
+    - "(2|3|two|three) .*(variants|versions|takes)"
+    - "what .*(could look|might look) like"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [design_mockups, variant_comparison, throwaway_prototypes]
+  output_types: [.html]
+
+actions:
+
+  intake_design:
+    description: Gather feel, references, and core action before generating variants
+    trigger_phrases: ["design intake", "gather requirements", "what should this feel like"]
+    rules:
+      - priority: HIGH
+        text: "Gather three things one question at a time: 1) Feel (adjectives, vibe), 2) References (apps/sites that capture it), 3) Core action (single most important user action)."
+      - priority: HIGH
+        text: "Reflect each answer briefly before the next question. Skip if user already gave all three."
+      - priority: NORMAL
+        text: "'calm, editorial, like Linear' tells you more than 'minimal'."
+
+  generate_variants:
+    description: Build 2-3 HTML variants with different design stances
+    trigger_phrases: ["create variants", "build mockups", "show me options", "design variants"]
+    rules:
+      - priority: CRITICAL
+        text: "Produce 2-3 variants, never 1, rarely 4+. Each is a complete standalone HTML file."
+      - priority: CRITICAL
+        text: "Each variant must take a DIFFERENT design stance, not different pixel values. Pick one axis and pull apart."
+      - priority: HIGH
+        text: "Good variant axes: density (compact/airy), emphasis (content/action/first), aesthetic (editorial/utilitarian/playful), layout (single-column/sidebar/split)."
+      - priority: HIGH
+        text: "Single self-contained HTML: inline <style>, system fonts or one Google Font, realistic fake content, interactive (clickable, hovers, one state transition)."
+      - priority: HIGH
+        text: "Verify visually with browser_vision — don't just write HTML and hope."
+      - priority: NORMAL
+        text: "Variant naming: describe stance not number. 001-calm-editorial, 002-utilitarian-dense, 003-playful-split."
+    data:
+      - key: variant_axes
+        list_value:
+          items:
+            - { string_value: "density: compact / airy / ultra-dense" }
+            - { string_value: "emphasis: content-first / action-first / tool-first" }
+            - { string_value: "aesthetic: editorial / utilitarian / playful" }
+            - { string_value: "layout: single-column / sidebar / split-pane" }
+            - { string_value: "grounding: card-based / bare-content / document-style" }
+    examples:
+      - label: "default CSS reset for fast starts"
+        language: html
+        code: |
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   -webkit-font-smoothing: antialiased; color: #1a1a1a; background: #fafafa; line-height: 1.5; }
+          </style>
+
+  head_to_head_comparison:
+    description: Present variants as opinionated comparison table
+    trigger_phrases: ["compare variants", "which is best", "head to head"]
+    rules:
+      - priority: HIGH
+        text: "Present comparison table with dimensions: density, primary action visibility, scan-ability, feel."
+      - priority: HIGH
+        text: "Opinionate — don't just list. State which is strongest and why."
+      - priority: NORMAL
+        text: "Let user pick winner, combine two into hybrid, or ask for another round."
+
+  variant_readme:
+    description: Write README for each variant documenting design stance
+    trigger_phrases: ["variant readme", "document the variant"]
+    rules:
+      - priority: NORMAL
+        text: "Each README answers: design stance (one sentence), key choices (layout/typography/color/interaction), trade-offs, best for."
+    data:
+      - key: readme_sections
+        list_value:
+          items: [{ string_value: "design_stance" }, { string_value: "key_choices" }, { string_value: "trade_offs" }, { string_value: "best_for" }]
+
+guardrails:
+  - text: "Variants must differ in design stance, not just accent color — user must be able to distinguish them"
+    scope: ALWAYS
+  - text: "Open HTML in browser and verify with browser_vision before showing to user"
+    scope: ALWAYS
+  - text: "Keep variants disposable — promote to real code only if user wants to keep one"
+    scope: ALWAYS
+
+related: []

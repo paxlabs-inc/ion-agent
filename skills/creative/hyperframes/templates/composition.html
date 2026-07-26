@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #161615;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    width: 1920px;
+    height: 1080px;
+  }
+  .scene {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Grain overlay */
+  .grain {
+    position: absolute; inset: 0; opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px; pointer-events: none; z-index: 100;
+  }
+  /* Radial glow */
+  .glow {
+    position: absolute; width: 600px; height: 600px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(153,189,156,0.12) 0%, transparent 70%);
+    top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0;
+  }
+  .title {
+    position: relative; z-index: 10;
+    font-size: 96px; font-weight: 700; color: #e3d9d4;
+    letter-spacing: -3px; line-height: 1; margin-bottom: 20px;
+  }
+  .subtitle {
+    position: relative; z-index: 10;
+    font-size: 28px; color: #96918e;
+    letter-spacing: 6px; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="COMP_ID" data-start="0" data-width="1920" data-height="1080">
+  <div class="scene">
+    <div class="grain"></div>
+    <div class="glow clip" id="glow" data-start="0" data-duration="8" data-track-index="0"></div>
+    <h1 class="title clip" id="title" data-start="0" data-duration="8" data-track-index="1">Title</h1>
+    <p class="subtitle clip" id="subtitle" data-start="0" data-duration="8" data-track-index="2">Subtitle</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.from("#glow", { scale: 0.5, opacity: 0, duration: 2, ease: "power2.out" }, 0);
+    tl.from("#title", { opacity: 0, y: 40, duration: 0.8, ease: "power3.out" }, 0.5);
+    tl.from("#subtitle", { opacity: 0, y: 20, duration: 0.6, ease: "power2.out" }, 0.9);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["COMP_ID"] = tl;
+  </script>
+</div>
+</body>
+</html>

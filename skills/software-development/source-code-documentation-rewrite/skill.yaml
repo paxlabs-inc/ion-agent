@@ -1,0 +1,92 @@
+skill:
+  name: source-code-documentation-rewrite
+  version: 1.0.0
+  summary: Systematically rewrite documentation pages from source code truth — read implementation, compare against existing docs, produce accurate reference documentation.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [rewrite docs, update docs, regenerate docs, documentation rewrite, docs from source, stale docs]
+  intents: [rewrite_documentation, update_docs_from_source, regenerate_reference_docs]
+  patterns:
+    - "(rewrite|update|regenerate) .*(docs|documentation) .*(source|code)"
+    - "docs .*(stale|outdated|wrong|don't match)"
+    - "documentation .*(doesn't match|drifted)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [documentation_rewrite]
+  output_types: [.md, .mdx]
+
+actions:
+
+  rewrite_docs:
+    description: Rewrite documentation by reading actual source code
+    trigger_phrases: ["rewrite docs from source", "update docs to match code", "regenerate reference docs"]
+    rules:
+      - priority: CRITICAL
+        text: "Do NOT trust existing docs as truth — they may describe deleted, renamed, or replaced features. Always verify against source."
+      - priority: CRITICAL
+        text: "Do NOT invent features — if source doesn't implement something, document it as (reserved) or omit"
+      - priority: HIGH
+        text: "Read architecture docs FIRST (README.md, docs/INDEX.md) to understand author's mental model before diving into source"
+      - priority: HIGH
+        text: "Batch reads aggressively — up to 10 independent files at a time to minimize round-trips"
+      - priority: HIGH
+        text: "Write docs in groups of 4-7 files per batch"
+      - priority: NORMAL
+        text: "Preserve doc filenames exactly — changing names breaks cross-references"
+      - priority: NORMAL
+        text: "Use tables for type definitions, method signatures, error codes, config fields"
+    data:
+      - key: format_conventions
+        list_value:
+          items:
+            - { string_value: "YAML frontmatter with title and description" }
+            - { string_value: "Start with **Source file(s):** pointing to implementation" }
+            - { string_value: "Use ## Design decisions sections for the why" }
+            - { string_value: "Use tables for types, methods, routes, error codes" }
+            - { string_value: "Include code blocks for key type definitions" }
+            - { string_value: "Use ## Modifying <thing> tables at end of each page" }
+      - key: priority_order
+        list_value:
+          items:
+            - { string_value: "1. Entry points (main.go, server.go, cmd/)" }
+            - { string_value: "2. Core types and interfaces" }
+            - { string_value: "3. Implementation files referenced by existing docs" }
+            - { string_value: "4. Config and wiring files" }
+    examples:
+      - label: "batch read workflow"
+        language: text
+        code: |
+          # Phase 1: Explore file structure
+          search_files(target='files')
+          # Phase 2: Read architecture docs
+          read_file("README.md")
+          # Phase 3: Read source in batches (10 at a time)
+          # Phase 4: Read existing docs
+          # Phase 5: Rewrite in batches of 4-7 files
+
+  verify_completeness:
+    description: Verify all target docs were written after rewrite
+    trigger_phrases: ["verify docs completeness", "check docs coverage"]
+    rules:
+      - priority: HIGH
+        text: "Do a final file listing to confirm all target docs were written — count files to make sure none were skipped"
+      - priority: NORMAL
+        text: "Watch for phased/incremental implementations — document what exists, note what's planned"
+
+guardrails:
+  - text: "Source code is always truth — never trust docs over source"
+    scope: ALWAYS
+  - text: "Never invent features not in the source"
+    scope: ALWAYS
+
+related: []

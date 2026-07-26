@@ -1,0 +1,82 @@
+skill:
+  name: simplify-code
+  version: 1.0.0
+  summary: Parallel 3-agent review and cleanup of recent code changes — reuse, quality, and efficiency reviewers.
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [simplify, simplify code, review changes, clean up code, simplify changes]
+  intents: [simplify_code, review_changes, cleanup_code]
+  patterns:
+    - "simplify"
+    - "(review|clean up) .*(my changes|code|recent changes)"
+    - "/simplify"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+
+provides:
+  capabilities: [code_simplification, parallel_review]
+  output_types: []
+
+actions:
+
+  simplify_code:
+    description: Run three focused reviewers in parallel and apply fixes
+    trigger_phrases: ["simplify", "simplify my changes", "simplify these changes", "/simplify"]
+    rules:
+      - priority: CRITICAL
+        text: "Give the WHOLE diff to each reviewer — splitting defeats cross-file duplication and N+1 detection"
+      - priority: CRITICAL
+        text: "Reviewers must search the codebase for evidence — a finding with no file:line pointer is noise"
+      - priority: HIGH
+        text: "Apply Chesterton's Fence: run git blame before flagging anything for removal — if you can't determine purpose, mark confidence: low"
+      - priority: HIGH
+        text: "Risk tiers: SAFE (auto-apply), CAREFUL (apply with verification), RISKY (flag for human review)"
+      - priority: HIGH
+        text: "Apply SAFE first, then CAREFUL (one file at a time with test verification), then RISKY (never auto-apply)"
+      - priority: NORMAL
+        text: "Three reviewers: Code Reuse, Code Quality, Efficiency — don't fan out wider than 3"
+      - priority: NORMAL
+        text: "Report format: file:line → problem → suggested fix | confidence: high/medium/low | risk: SAFE/CAREFUL/RISKY"
+      - priority: NORMAL
+        text: "Respect project conventions — if repo has AGENTS.md/CLAUDE.md/ION.md, fold those rules into reviewer prompts"
+    data:
+      - key: reviewer_1_reuse
+        string_value: "Review for code that duplicates functionality already in the codebase — search utility modules, shared helpers, adjacent files for existing functions the new code could call instead"
+      - key: reviewer_2_quality
+        string_value: "Review for redundant state, parameter sprawl, copy-paste-with-variation, leaky abstractions, stringly-typed code, AI-generated slop patterns"
+      - key: reviewer_3_efficiency
+        string_value: "Review for unnecessary work, missed concurrency, hot-path bloat, TOCTOU anti-patterns, memory issues, overly broad reads, silent failures"
+      - key: resolution_order
+        string_value: "correctness > user's stated focus > readability/reuse > micro-perf"
+    examples:
+      - label: "launch three reviewers in parallel"
+        language: text
+        code: |
+          delegate_task(tasks=[
+              {"goal": "Reviewer 1 — Code Reuse: search for duplicate functionality...", "toolsets": ["terminal", "file", "search"]},
+              {"goal": "Reviewer 2 — Code Quality: review for quality problems...", "toolsets": ["terminal", "file", "search"]},
+              {"goal": "Reviewer 3 — Efficiency: review for efficiency problems...", "toolsets": ["terminal", "file", "search"]}
+          ])
+
+  dry_run_simplify:
+    description: Run reviewers but don't apply changes — report only
+    trigger_phrases: ["simplify dry run", "just report simplify", "simplify but don't change"]
+    rules:
+      - priority: HIGH
+        text: "Present all three risk tiers and apply nothing — ask before applying"
+
+guardrails:
+  - text: "Don't auto-run after every edit — invoke only when user explicitly asks"
+    scope: ALWAYS
+  - text: "Don't rewrite beyond what the diff touched — keep edits scoped"
+    scope: ALWAYS
+
+related: []

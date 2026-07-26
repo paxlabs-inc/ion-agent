@@ -1,0 +1,118 @@
+{
+  "../../assets/ion-logo-dark/Wide620x300Logo.png": {
+    "file": "assets/Wide620x300Logo-BhCeTqUK.png",
+    "src": "../../assets/ion-logo-dark/Wide620x300Logo.png"
+  },
+  "../../assets/ion-logo-dark/favicon.ico": {
+    "file": "assets/favicon-BZruM4J1.ico",
+    "src": "../../assets/ion-logo-dark/favicon.ico"
+  },
+  "../../assets/ion-logo-light/Wide620x300Logo.png": {
+    "file": "assets/Wide620x300Logo-rrWsWjpD.png",
+    "src": "../../assets/ion-logo-light/Wide620x300Logo.png"
+  },
+  "../../assets/ion-logo-light/favicon.ico": {
+    "file": "assets/favicon-BwQ69chT.ico",
+    "src": "../../assets/ion-logo-light/favicon.ico"
+  },
+  "../node_modules/@fontsource-variable/geist/files/geist-cyrillic-ext-wght-normal.woff2": {
+    "file": "assets/geist-cyrillic-ext-wght-normal-DjL33-gN.woff2",
+    "src": "../node_modules/@fontsource-variable/geist/files/geist-cyrillic-ext-wght-normal.woff2"
+  },
+  "../node_modules/@fontsource-variable/geist/files/geist-cyrillic-wght-normal.woff2": {
+    "file": "assets/geist-cyrillic-wght-normal-BEAKL7Jp.woff2",
+    "src": "../node_modules/@fontsource-variable/geist/files/geist-cyrillic-wght-normal.woff2"
+  },
+  "../node_modules/@fontsource-variable/geist/files/geist-latin-ext-wght-normal.woff2": {
+    "file": "assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2",
+    "src": "../node_modules/@fontsource-variable/geist/files/geist-latin-ext-wght-normal.woff2"
+  },
+  "../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2": {
+    "file": "assets/geist-latin-wght-normal-BgDaEnEv.woff2",
+    "src": "../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2"
+  },
+  "../node_modules/@fontsource-variable/geist/files/geist-vietnamese-wght-normal.woff2": {
+    "file": "assets/geist-vietnamese-wght-normal-6IgcOCM7.woff2",
+    "src": "../node_modules/@fontsource-variable/geist/files/geist-vietnamese-wght-normal.woff2"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-cyrillic-400-normal.woff": {
+    "file": "assets/geist-mono-cyrillic-400-normal-CPJFfJgk.woff",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-cyrillic-400-normal.woff"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-cyrillic-400-normal.woff2": {
+    "file": "assets/geist-mono-cyrillic-400-normal-C51Di1Mf.woff2",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-cyrillic-400-normal.woff2"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff": {
+    "file": "assets/geist-mono-latin-400-normal-B2yvC1Cq.woff",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2": {
+    "file": "assets/geist-mono-latin-400-normal-DTRLJnHl.woff2",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-ext-400-normal.woff": {
+    "file": "assets/geist-mono-latin-ext-400-normal-CfzLURNc.woff",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-ext-400-normal.woff"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-ext-400-normal.woff2": {
+    "file": "assets/geist-mono-latin-ext-400-normal-DI-rJ0UV.woff2",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-latin-ext-400-normal.woff2"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-symbols2-400-normal.woff": {
+    "file": "assets/geist-mono-symbols2-400-normal-DjbiTEEA.woff",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-symbols2-400-normal.woff"
+  },
+  "../node_modules/@fontsource/geist-mono/files/geist-mono-vietnamese-400-normal.woff": {
+    "file": "assets/geist-mono-vietnamese-400-normal-CZEPLOgu.woff",
+    "src": "../node_modules/@fontsource/geist-mono/files/geist-mono-vietnamese-400-normal.woff"
+  },
+  "_react-Bi7s_aYO.js": {
+    "file": "assets/react-Bi7s_aYO.js",
+    "name": "react"
+  },
+  "index.html": {
+    "file": "assets/index-6l0CY_2w.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_react-Bi7s_aYO.js"
+    ],
+    "dynamicImports": [
+      "src/features/computer/ComputerStage.tsx"
+    ],
+    "css": [
+      "assets/index-DVTvM27M.css"
+    ],
+    "assets": [
+      "assets/Wide620x300Logo-rrWsWjpD.png",
+      "assets/Wide620x300Logo-BhCeTqUK.png",
+      "assets/geist-cyrillic-ext-wght-normal-DjL33-gN.woff2",
+      "assets/geist-cyrillic-wght-normal-BEAKL7Jp.woff2",
+      "assets/geist-vietnamese-wght-normal-6IgcOCM7.woff2",
+      "assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2",
+      "assets/geist-latin-wght-normal-BgDaEnEv.woff2",
+      "assets/geist-mono-cyrillic-400-normal-C51Di1Mf.woff2",
+      "assets/geist-mono-cyrillic-400-normal-CPJFfJgk.woff",
+      "assets/geist-mono-symbols2-400-normal-DjbiTEEA.woff",
+      "assets/geist-mono-vietnamese-400-normal-CZEPLOgu.woff",
+      "assets/geist-mono-latin-ext-400-normal-DI-rJ0UV.woff2",
+      "assets/geist-mono-latin-ext-400-normal-CfzLURNc.woff",
+      "assets/geist-mono-latin-400-normal-DTRLJnHl.woff2",
+      "assets/geist-mono-latin-400-normal-B2yvC1Cq.woff",
+      "assets/favicon-BZruM4J1.ico",
+      "assets/favicon-BwQ69chT.ico"
+    ]
+  },
+  "src/features/computer/ComputerStage.tsx": {
+    "file": "assets/ComputerStage-BFiVYsCN.js",
+    "name": "ComputerStage",
+    "src": "src/features/computer/ComputerStage.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_react-Bi7s_aYO.js"
+    ]
+  }
+}

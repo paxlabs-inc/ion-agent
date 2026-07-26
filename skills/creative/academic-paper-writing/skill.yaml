@@ -1,0 +1,121 @@
+skill:
+  name: academic-paper-writing
+  version: 1.0.0
+  summary: Write academic papers as plain text with IEEE structure, anti-AI style rules, and verified citations
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [academic paper, research paper, scholarly article, IEEE, plain text paper, anti-AI writing, citations]
+  intents: [write_academic_paper, write_research_paper, scholarly_writing]
+  patterns:
+    - "(write|draft|create) .*(paper|article|report) .*(academic|research|scholarly)"
+    - "IEEE .*(paper|format|structure)"
+    - "anti-AI .*(writing|paper|style)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [academic_paper_writing, ieee_format, citation_verification, anti_ai_style]
+  output_types: [.txt]
+
+actions:
+
+  research_citations:
+    description: Locate genuine arXiv IDs before drafting any prose
+    trigger_phrases: ["find citations", "search arXiv", "locate references"]
+    rules:
+      - priority: CRITICAL
+        text: "Never fabricate citations — every arXiv ID must resolve to a real paper"
+      - priority: CRITICAL
+        text: "Use web_search with targeted queries to find genuine arXiv IDs"
+      - priority: HIGH
+        text: "Confirm each ID follows format: arXiv:YYMM.NNNNN"
+      - priority: HIGH
+        text: "Include minimum 15 references in research papers"
+      - priority: NORMAL
+        text: "Favor arXiv IDs over DOIs for broader accessibility"
+    data:
+      - key: id_format
+        string_value: "arXiv:YYMM.NNNNN"
+      - key: min_references
+        int_value: 15
+
+  write_paper:
+    description: Compose paper following IEEE-style structure with voice and style constraints
+    trigger_phrases: ["write the paper", "draft the paper", "compose the paper"]
+    rules:
+      - priority: CRITICAL
+        text: "Use 'we' voice throughout — never 'I' or passive constructions like 'it can be observed'"
+      - priority: CRITICAL
+        text: "No em dashes (— or --) — use commas, parentheses, or hyphens"
+      - priority: CRITICAL
+        text: "Banned words: delve, landscape, tapestry, crucial, furthermore, moreover, aforementioned, notably, particularly"
+      - priority: CRITICAL
+        text: "Banned phrases: 'it is important to note', 'in the realm of', 'in conclusion' (in prose)"
+      - priority: HIGH
+        text: "Precise claim boundaries — avoid 'may'/'might' unless genuine uncertainty exists"
+      - priority: HIGH
+        text: "Include formal definitions and propositions where they strengthen the argument"
+      - priority: NORMAL
+        text: "IEEE structure: Title, Author, ABSTRACT, Index Terms, numbered Roman numeral sections, REFERENCES"
+    data:
+      - key: ieee_structure
+        list_value:
+          items:
+            - { string_value: "Title" }
+            - { string_value: "Author, Affiliation" }
+            - { string_value: "ABSTRACT (150-250 words)" }
+            - { string_value: "Index Terms" }
+            - { string_value: "I. INTRODUCTION" }
+            - { string_value: "II-X. Body sections" }
+            - { string_value: "X. CONCLUSION" }
+            - { string_value: "REFERENCES ([1], [2], ...)" }
+      - key: banned_words
+        list_value:
+          items:
+            - { string_value: "delve" }
+            - { string_value: "landscape" }
+            - { string_value: "tapestry" }
+            - { string_value: "crucial" }
+            - { string_value: "furthermore" }
+            - { string_value: "moreover" }
+            - { string_value: "aforementioned" }
+            - { string_value: "notably" }
+            - { string_value: "particularly" }
+
+  verify_paper:
+    description: Run verification checks before delivery — correct ALL violations
+    trigger_phrases: ["verify paper", "check paper", "run checks"]
+    rules:
+      - priority: CRITICAL
+        text: "Run ALL checks before saving: word count, banned words, em dashes, first-person voice, reference count"
+      - priority: HIGH
+        text: "Word count target: 4000-6000 for research papers"
+      - priority: HIGH
+        text: "Banned word grep should return nothing"
+      - priority: NORMAL
+        text: "Fix violations with sed for word replacements, patch for complex passages"
+    data:
+      - key: verification_commands
+        list_value:
+          items:
+            - { string_value: "wc -w FILE" }
+            - { string_value: "grep -inE 'delve|landscape|tapestry|crucial|...' FILE" }
+            - { string_value: "grep -cP '\\x{2014}' FILE" }
+            - { string_value: "grep -nP '^I [a-z]|\\. I [a-z]' FILE" }
+            - { string_value: "grep -cP '^\\[\\d+\\]' FILE" }
+
+guardrails:
+  - text: "Never fabricate citations — every reference must be verified via web search"
+    scope: ALWAYS
+  - text: "Run verification grep before delivering any paper"
+    scope: ALWAYS
+
+related: [humanizer, arxiv]

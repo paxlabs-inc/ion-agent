@@ -1,0 +1,160 @@
+skill:
+  name: serving-llms-vllm
+  version: 1.0.0
+  summary: "vLLM: high-throughput LLM serving with OpenAI-compatible API, PagedAttention, quantization"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos]
+
+triggers:
+  keywords: [vllm, vllm serve, pagedattention, continuous batching, llm serving, openai api server, tensor parallelism, high throughput inference]
+  intents: [serve_model, deploy_llm, batch_inference, quantized_serving]
+  patterns:
+    - "(serve|deploy|run) .*(vllm|vllm|llm server)"
+    - "vllm (serve|start|run)"
+    - "(openai|compatible) .*(api|server|endpoint)"
+    - "(high.?throughput|production) .*(inference|serving)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [pip, python3]
+
+provides:
+  capabilities: [llm_serving, openai_compatible_api, batch_inference, quantized_serving]
+  output_types: []
+
+actions:
+
+  install:
+    description: Install vLLM
+    trigger_phrases: ["install vllm", "set up vllm"]
+    rules:
+      - priority: HIGH
+        text: "pip install vllm"
+      - priority: NORMAL
+        text: "Requires NVIDIA GPU with CUDA support"
+    data:
+      - key: install_command
+        string_value: "pip install vllm"
+
+  offline_inference:
+    description: Run batch inference without server overhead
+    trigger_phrases: ["batch inference", "offline inference", "process prompts in batch"]
+    rules:
+      - priority: HIGH
+        text: "Use LLM class for offline inference — no server needed"
+      - priority: HIGH
+        text: "vLLM handles batching internally — no need to manually chunk prompts"
+      - priority: NORMAL
+        text: "Use SamplingParams for temperature, max_tokens, stop sequences"
+    examples:
+      - label: "basic offline inference"
+        language: python
+        code: |
+          from vllm import LLM, SamplingParams
+          llm = LLM(model="meta-llama/Llama-3-8B-Instruct")
+          sampling = SamplingParams(temperature=0.7, max_tokens=256)
+          outputs = llm.generate(["Explain quantum computing"], sampling)
+          print(outputs[0].outputs[0].text)
+
+  serve_model:
+    description: Deploy a model as an OpenAI-compatible API server
+    trigger_phrases: ["serve a model", "start vllm server", "deploy llm api", "openai compatible server"]
+    rules:
+      - priority: CRITICAL
+        text: "vllm serve MODEL starts OpenAI-compatible server on port 8000"
+      - priority: HIGH
+        text: "For 7B-13B: single GPU, gpu-memory-utilization 0.9, max-model-len 8192"
+      - priority: HIGH
+        text: "For 30B-70B: use --tensor-parallel-size with multiple GPUs"
+      - priority: HIGH
+        text: "Enable --enable-prefix-caching for repeated prompt patterns"
+      - priority: NORMAL
+        text: "Use Docker: docker run --gpus all -p 8000:8000 vllm/vllm-openai:latest"
+    data:
+      - key: server_configs
+        map_value:
+          entries:
+            small_model: { string_value: "vllm serve MODEL --gpu-memory-utilization 0.9 --max-model-len 8192 --port 8000" }
+            large_model: { string_value: "vllm serve MODEL --tensor-parallel-size 4 --quantization awq --port 8000" }
+            production: { string_value: "vllm serve MODEL --enable-prefix-caching --enable-metrics --metrics-port 9090 --host 0.0.0.0" }
+    examples:
+      - label: "serve 7B model"
+        language: bash
+        code: |
+          vllm serve meta-llama/Llama-3-8B-Instruct \
+            --gpu-memory-utilization 0.9 \
+            --max-model-len 8192 \
+            --port 8000
+      - label: "query with openai sdk"
+        language: python
+        code: |
+          from openai import OpenAI
+          client = OpenAI(base_url='http://localhost:8000/v1', api_key='EMPTY')
+          print(client.chat.completions.create(
+              model='meta-llama/Llama-3-8B-Instruct',
+              messages=[{'role': 'user', 'content': 'Hello!'}]
+          ).choices[0].message.content)
+
+  quantized_serving:
+    description: Serve quantized models to fit large models in limited VRAM
+    trigger_phrases: ["quantized serving", "serve quantized model", "awq model", "gptq model"]
+    rules:
+      - priority: HIGH
+        text: "AWQ: best for 70B models, minimal accuracy loss"
+      - priority: HIGH
+        text: "GPTQ: wide model support, good compression"
+      - priority: HIGH
+        text: "FP8: fastest on H100 GPUs"
+      - priority: NORMAL
+        text: "Use pre-quantized models from HuggingFace (e.g. TheBloke/Llama-2-70B-AWQ)"
+    data:
+      - key: quantization_methods
+        map_value:
+          entries:
+            awq: { string_value: "Best for 70B, minimal accuracy loss" }
+            gptq: { string_value: "Wide support, good compression" }
+            fp8: { string_value: "Fastest on H100 GPUs" }
+    examples:
+      - label: "serve AWQ model"
+        language: bash
+        code: |
+          vllm serve TheBloke/Llama-2-70B-AWQ \
+            --quantization awq \
+            --gpu-memory-utilization 0.95
+
+  monitoring:
+    description: Monitor vLLM server performance metrics
+    trigger_phrases: ["monitor vllm", "vllm metrics", "check server performance"]
+    rules:
+      - priority: HIGH
+        text: "Prometheus metrics on port 9090 with --enable-metrics"
+      - priority: HIGH
+        text: "Key metrics: vllm:time_to_first_token_seconds, vllm:num_requests_running, vllm:gpu_cache_usage_perc"
+      - priority: NORMAL
+        text: "Target: TTFT < 500ms, GPU utilization > 80%, throughput > 100 req/sec"
+    data:
+      - key: key_metrics
+        list_value:
+          items:
+            - { string_value: "vllm:time_to_first_token_seconds — latency" }
+            - { string_value: "vllm:num_requests_running — active requests" }
+            - { string_value: "vllm:gpu_cache_usage_perc — KV cache utilization" }
+
+guardrails:
+  - text: "vLLM requires NVIDIA GPU with CUDA — no CPU-only mode"
+    scope: ALWAYS
+  - text: "Tensor parallelism should use power-of-2 GPU counts (2, 4, 8)"
+    scope: ALWAYS
+  - text: "Always test with load before production deployment"
+    scope: WRITE_OPS
+
+related:
+  - name: llama-cpp
+    relationship: alternative_to
+    description: "llama.cpp for CPU/edge/single-user inference"
+  - name: evaluating-llms-harness
+    relationship: composes_with
+    description: "Use vLLM backend for faster evaluation"

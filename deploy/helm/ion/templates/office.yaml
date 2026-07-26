@@ -1,0 +1,137 @@
+{{- if .Values.office.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ion.fullname" . }}-office
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+    app.kubernetes.io/component: office-engine
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ion.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: office-engine
+  template:
+    metadata:
+      labels:
+        {{- include "ion.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: office-engine
+    spec:
+      securityContext:
+        {{- toYaml .Values.office.podSecurityContext | nindent 8 }}
+      containers:
+        - name: onlyoffice
+          image: "{{ .Values.office.image.repository }}:{{ .Values.office.image.tag }}"
+          imagePullPolicy: {{ .Values.office.image.pullPolicy }}
+          env:
+            - name: JWT_ENABLED
+              value: "true"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.office.jwt.existingSecret | quote }}
+                  key: {{ .Values.office.jwt.secretKey | quote }}
+            - name: JWT_HEADER
+              value: Authorization
+            - name: JWT_IN_BODY
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            {{- toYaml .Values.office.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.office.securityContext | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+            - name: office-data
+              mountPath: /var/www/onlyoffice/Data
+            - name: office-lib
+              mountPath: /var/lib/onlyoffice
+            - name: office-log
+              mountPath: /var/log/onlyoffice
+      volumes:
+        - name: office-data
+          {{- if .Values.office.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "ion.fullname" . }}-office-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: office-lib
+          {{- if .Values.office.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "ion.fullname" . }}-office-lib
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: office-log
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ion.fullname" . }}-office
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+    app.kubernetes.io/component: office-engine
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ion.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: office-engine
+  ports:
+    - name: http
+      port: {{ .Values.office.service.port }}
+      targetPort: http
+{{- if .Values.office.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ion.fullname" . }}-office-data
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.office.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.office.persistence.dataSize }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ion.fullname" . }}-office-lib
+  labels:
+    {{- include "ion.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.office.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.office.persistence.libSize }}
+{{- end }}
+{{- end }}

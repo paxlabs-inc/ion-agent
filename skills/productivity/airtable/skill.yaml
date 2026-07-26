@@ -1,0 +1,218 @@
+skill:
+  name: airtable
+  version: 1.1.0
+  summary: Airtable REST API via curl — records CRUD, filters, upserts
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [airtable, base, table, record, airtable api, filterByFormula]
+  intents: [airtable_read, airtable_write, airtable_query, airtable_upsert, airtable_delete]
+  patterns:
+    - "(read|write|create|update|delete|query|filter) .*(airtable|base|table|record)"
+    - "airtable .*(record|table|base|filter|upsert)"
+
+requires:
+  env_all: [AIRTABLE_API_KEY]
+  tools:
+    - name: terminal
+      required: true
+  binaries: [curl, python3]
+
+provides:
+  capabilities: [airtable_read, airtable_write, airtable_query, airtable_upsert, airtable_batch, airtable_pagination]
+  output_types: [.json]
+
+actions:
+
+  setup:
+    description: First-time Airtable setup — generate PAT and configure access
+    trigger_phrases: ["set up airtable", "configure airtable", "airtable setup"]
+    rules:
+      - priority: CRITICAL
+        text: "Generate a Personal Access Token (PAT) at https://airtable.com/create/tokens — tokens start with 'pat...'"
+      - priority: CRITICAL
+        text: "Assign scopes: data.records:read, data.records:write, schema.bases:read"
+      - priority: CRITICAL
+        text: "Add every target base to the token's Access list — a valid token on wrong base yields 403"
+      - priority: HIGH
+        text: "Legacy 'key...' API keys retired Feb 2024 — only PATs and OAuth accepted"
+      - priority: NORMAL
+        text: "Store token in ${ION_HOME:-~/.ion}/.env as AIRTABLE_API_KEY=pat_your_token_here"
+    data:
+      - key: auth_header
+        string_value: "Authorization: Bearer $AIRTABLE_API_KEY"
+      - key: base_endpoint
+        string_value: "https://api.airtable.com/v0"
+      - key: rate_limit
+        string_value: "5 requests/sec/base"
+        unit: "requests/sec"
+
+  list_bases:
+    description: List all bases visible to the token
+    trigger_phrases: ["list airtable bases", "show my bases", "get bases"]
+    rules:
+      - priority: HIGH
+        text: "GET /v0/meta/bases — requires schema.bases:read scope"
+      - priority: NORMAL
+        text: "Always pipe through python3 -m json.tool for formatted output"
+    data:
+      - key: endpoint
+        string_value: "GET https://api.airtable.com/v0/meta/bases"
+    examples:
+      - label: "list all bases"
+        language: bash
+        code: |
+          curl -s "https://api.airtable.com/v0/meta/bases" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" | python3 -m json.tool
+
+  list_tables:
+    description: List tables and schema for a base
+    trigger_phrases: ["list airtable tables", "show table schema", "get table fields"]
+    rules:
+      - priority: CRITICAL
+        text: "Run BEFORE any writes — confirms exact field names, IDs, and select options"
+      - priority: HIGH
+        text: "GET /v0/meta/bases/{base_id}/tables"
+    data:
+      - key: endpoint
+        string_value: "GET https://api.airtable.com/v0/meta/bases/{base_id}/tables"
+
+  read_records:
+    description: Read or filter records from a table
+    trigger_phrases: ["list airtable records", "get records", "filter airtable records", "query airtable"]
+    rules:
+      - priority: CRITICAL
+        text: "filterByFormula requires URL encoding — use python3 urllib.parse.quote, never hand-encode"
+      - priority: HIGH
+        text: "Max 100 records per page — use offset pagination for more"
+      - priority: HIGH
+        text: "Include -s on curl to suppress progress bars"
+      - priority: NORMAL
+        text: "Empty fields are absent from responses — missing key means blank value, not missing field"
+    data:
+      - key: endpoint
+        string_value: "GET https://api.airtable.com/v0/{base_id}/{table}"
+      - key: formula_patterns
+        map_value:
+          entries:
+            exact_match: { string_value: "{Field}='value'" }
+            contains: { string_value: "FIND('text', LOWER({Field}))" }
+            and: { string_value: "AND({A}='x', {B}='y')" }
+            or: { string_value: "OR({A}='x', {B}='y')" }
+            not_empty: { string_value: "NOT({Field}='')" }
+            date_after: { string_value: "IS_AFTER({Date}, TODAY())" }
+    examples:
+      - label: "filter records with URL-encoded formula"
+        language: bash
+        code: |
+          FORMULA="{Status}='Todo'"
+          ENC=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$FORMULA")
+          curl -s "https://api.airtable.com/v0/$BASE_ID/$TABLE?filterByFormula=$ENC&maxRecords=20" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" | python3 -m json.tool
+
+  create_records:
+    description: Create one or more records in a table
+    trigger_phrases: ["create airtable record", "add record to airtable", "insert airtable row"]
+    rules:
+      - priority: CRITICAL
+        text: "Batch max is 10 records per request — iterate with pause for larger inserts"
+      - priority: HIGH
+        text: "Use typecast: true to auto-coerce values and create new select options"
+      - priority: HIGH
+        text: "POST /v0/{base_id}/{table} with {fields: {...}} or {records: [{fields: {...}}]}"
+    examples:
+      - label: "create a single record"
+        language: bash
+        code: |
+          curl -s -X POST "https://api.airtable.com/v0/$BASE_ID/$TABLE" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"fields":{"Name":"New task","Status":"Todo","Priority":"High"}}' | python3 -m json.tool
+      - label: "batch create up to 10 records"
+        language: bash
+        code: |
+          curl -s -X POST "https://api.airtable.com/v0/$BASE_ID/$TABLE" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"typecast":true,"records":[{"fields":{"Name":"A","Status":"Todo"}},{"fields":{"Name":"B","Status":"Done"}}]}' | python3 -m json.tool
+
+  update_records:
+    description: Update or upsert records
+    trigger_phrases: ["update airtable record", "patch airtable", "upsert airtable"]
+    rules:
+      - priority: CRITICAL
+        text: "PATCH merges fields (preserves omitted). PUT overwrites and clears omitted fields — default to PATCH"
+      - priority: HIGH
+        text: "For upsert: use performUpsert with fieldsToMergeOn — inserts on new merge-field values, patches on matches"
+      - priority: NORMAL
+        text: "Resolve record IDs via filterByFormula first — never guess IDs"
+    data:
+      - key: endpoints
+        map_value:
+          entries:
+            single: { string_value: "PATCH /v0/{base_id}/{table}/{record_id}" }
+            batch: { string_value: "PATCH /v0/{base_id}/{table}" }
+            upsert: { string_value: "PATCH /v0/{base_id}/{table} with performUpsert" }
+    examples:
+      - label: "upsert by merge field"
+        language: bash
+        code: |
+          curl -s -X PATCH "https://api.airtable.com/v0/$BASE_ID/$TABLE" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"performUpsert":{"fieldsToMergeOn":["Email"]},"records":[{"fields":{"Email":"user@example.com","Status":"Active"}}]}' | python3 -m json.tool
+
+  delete_records:
+    description: Delete one or more records
+    trigger_phrases: ["delete airtable record", "remove airtable row"]
+    rules:
+      - priority: CRITICAL
+        text: "Deletions are irreversible via API — confirm count and filter with user before executing"
+      - priority: HIGH
+        text: "Batch delete max 10 records per request using records[] query param"
+    examples:
+      - label: "delete a single record"
+        language: bash
+        code: |
+          curl -s -X DELETE "https://api.airtable.com/v0/$BASE_ID/$TABLE/$RECORD_ID" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" | python3 -m json.tool
+
+  pagination:
+    description: Paginate through all records in a table
+    trigger_phrases: ["get all airtable records", "paginate airtable", "list all rows"]
+    rules:
+      - priority: HIGH
+        text: "Max 100 records per page — loop with offset until field is absent"
+      - priority: NORMAL
+        text: "Pagination is per-page, not global — no way to increase the 100-record cap"
+    examples:
+      - label: "pagination loop"
+        language: bash
+        code: |
+          OFFSET=""
+          while :; do
+            URL="https://api.airtable.com/v0/$BASE_ID/$TABLE?pageSize=100"
+            [ -n "$OFFSET" ] && URL="$URL&offset=$OFFSET"
+            RESP=$(curl -s "$URL" -H "Authorization: Bearer $AIRTABLE_API_KEY")
+            echo "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(r["id"], r["fields"].get("Name","")) for r in d["records"]]'
+            OFFSET=$(echo "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("offset",""))')
+            [ -z "$OFFSET" ] && break
+          done
+
+guardrails:
+  - text: "Always use curl via terminal tool — never web_extract (no auth headers) or browser_navigate"
+    scope: ALWAYS
+  - text: "AIRTABLE_API_KEY auto-loaded from ${ION_HOME:-~/.ion}/.env — no need to re-export"
+    scope: ALWAYS
+  - text: "Run schema check (list tables) before any writes to confirm field names"
+    scope: WRITE_OPS
+  - text: "Confirm destructive deletions with user — show filter + record count first"
+    scope: WRITE_OPS
+  - text: "Rate limit 5 req/sec/base — watch Retry-After header on 429"
+    scope: ALWAYS
+  - text: "Read the errors array on non-2xx — structured codes pinpoint exact issues"
+    scope: ALWAYS
+
+related: []

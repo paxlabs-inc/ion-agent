@@ -1,0 +1,93 @@
+skill:
+  name: architecture-pipeline
+  version: 1.0.0
+  summary: "Multi-phase architecture pipeline: research, genesis writing, adversarial security review, revision, and implementation planning."
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [architecture pipeline, security review, adversarial review, architecture document, implementation plan]
+  intents: [design_architecture, security_review, implementation_plan, harden_design]
+  patterns:
+    - "(design|build|create) .*(architecture|system design)"
+    - "(security|adversarial) review .*(design|architecture)"
+    - "implementation plan .*(architecture|design)"
+    - "harden .*(design|architecture)"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [architecture_pipeline, security_review, implementation_planning]
+  output_types: [.md]
+
+actions:
+
+  architecture_pipeline:
+    description: Execute the 5-phase architecture pipeline with specialized subagents
+    trigger_phrases: ["run architecture pipeline", "design system architecture", "produce implementation plan"]
+    rules:
+      - priority: CRITICAL
+        text: "Do NOT skip the security review — every architecture has blind spots that the adversarial subagent finds"
+      - priority: CRITICAL
+        text: "Do NOT produce the implementation plan before the security revision — revision changes data structures, constraints, and adds gates"
+      - priority: CRITICAL
+        text: "Do NOT use the same subagent role for security and planning — they require fundamentally different mindsets (adversarial vs constructive)"
+      - priority: HIGH
+        text: "Phase 2.5 subagent must produce: threat model, attack vectors, defense architecture, safety classification (GREEN/YELLOW/RED), cryptographic spec, day zero/100 checklists"
+      - priority: HIGH
+        text: "Phase 3 subagent must produce: language decisions, dependency map, concurrency model, storage architecture, performance budget, build order, testing strategy"
+      - priority: HIGH
+        text: "After security review returns, produce a revision document listing every change from original architecture"
+      - priority: NORMAL
+        text: "Maintain a running corpus summary with document name, word count, and role in pipeline"
+      - priority: NORMAL
+        text: "Word count targets: architecture ~5000, security spec 8000-12000, implementation plan 10000-15000"
+    data:
+      - key: phases
+        list_value:
+          items:
+            - { string_value: "Phase 1: Research Synthesis" }
+            - { string_value: "Phase 2: Genesis Writing" }
+            - { string_value: "Phase 2.5: Adversarial Security Review" }
+            - { string_value: "Phase 3: Implementation Planning" }
+      - key: security_review_sections
+        list_value:
+          items:
+            - { string_value: "Threat model (adversary classes, attack surfaces, crown jewels)" }
+            - { string_value: "Attack vectors (full enumeration per component)" }
+            - { string_value: "Defense architecture (preventive, detective, recovery, residual risk)" }
+            - { string_value: "Safety classification (GREEN/YELLOW/RED per capability)" }
+            - { string_value: "Cryptographic specification (algorithms, key hierarchy, rotation)" }
+            - { string_value: "Day Zero checklist (testable requirements before code)" }
+            - { string_value: "Day 100 checklist (requirements before autonomous features)" }
+            - { string_value: "Residual risk register (accept/transfer/mitigate)" }
+    examples:
+      - label: "security reviewer subagent prompt"
+        language: text
+        code: |
+          Role: Security architect + adversarial red-teamer
+          Goal: Attack the architecture from every angle
+          Demand: BRUTAL, assume the worst, assume every component will be targeted
+
+  inspect_pipeline:
+    description: Review or inspect an existing architecture pipeline document set
+    trigger_phrases: ["review architecture", "check pipeline", "inspect architecture docs"]
+    rules:
+      - priority: HIGH
+        text: "Read ALL prior documents before making recommendations"
+      - priority: NORMAL
+        text: "Check that revision document integrates all security findings back into architecture"
+
+guardrails:
+  - text: "Never skip the adversarial security review phase"
+    scope: ALWAYS
+  - text: "Never let the security reviewer be polite — demand BRUTAL analysis"
+    scope: ALWAYS
+
+related: []

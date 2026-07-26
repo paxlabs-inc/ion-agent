@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an idea or enhancement for Ion
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. For open-ended ideas, consider starting a
+        [discussion](https://github.com/paxlabs-inc/ion-agent/discussions) first.
+        Note that direction is driven by the authoritative specification at
+        `spec/ion_spec/spec.kvx`.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case and the pain point. Avoid jumping to a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Ion to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, references, or screenshots.

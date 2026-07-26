@@ -1,0 +1,100 @@
+skill:
+  name: apple-notes
+  version: 1.0.0
+  summary: "Manage Apple Notes via memo CLI: create, search, edit, export"
+  author: Ion Agent
+  license: MIT
+  platforms: [macos]
+
+triggers:
+  keywords: [notes, apple notes, memo, note-taking, icloud notes]
+  intents: [create_note, search_notes, edit_note, delete_note, move_note, export_notes]
+  patterns:
+    - "(create|add|save|write) .*(note|notes)"
+    - "(search|find|look up) .*(note|notes)"
+    - "(list|show|view) .*(note|notes)"
+    - "apple notes"
+
+requires:
+  binaries: [memo]
+  tools:
+    - name: terminal
+      required: true
+
+provides:
+  capabilities: [apple_notes_read, apple_notes_write, apple_notes_search, apple_notes_export]
+  output_types: [.md, .html]
+
+actions:
+
+  view_notes:
+    description: List, filter, or search Apple Notes
+    trigger_phrases: ["show my notes", "list notes", "search notes", "find notes"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes to list all, memo notes -f 'Folder' to filter, memo notes -s 'query' to search"
+      - priority: NORMAL
+        text: "Notes with images/attachments cannot be edited through CLI"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            list_all: { string_value: "memo notes" }
+            filter_folder: { string_value: "memo notes -f 'Folder Name'" }
+            search: { string_value: "memo notes -s 'query'" }
+
+  create_notes:
+    description: Create a new Apple Note
+    trigger_phrases: ["create a note", "add a note", "save to notes", "new note"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes -a 'Title' for quick add, memo notes -a for interactive editor"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            quick_add: { string_value: "memo notes -a 'Note Title'" }
+            interactive: { string_value: "memo notes -a" }
+
+  edit_notes:
+    description: Edit an existing Apple Note
+    trigger_phrases: ["edit a note", "update note", "modify note"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes -e for interactive selection to edit"
+      - priority: NORMAL
+        text: "Notes with images/attachments cannot be edited through CLI"
+
+  delete_notes:
+    description: Delete an Apple Note
+    trigger_phrases: ["delete a note", "remove note"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes -d for interactive selection to delete"
+
+  move_notes:
+    description: Move a note to a different folder
+    trigger_phrases: ["move note", "organize notes"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes -m for interactive move to folder"
+
+  export_notes:
+    description: Export notes to HTML or Markdown
+    trigger_phrases: ["export notes", "convert note to markdown"]
+    rules:
+      - priority: HIGH
+        text: "Use memo notes -ex to export to HTML/Markdown"
+
+guardrails:
+  - text: "Notes with images or attachments cannot be edited through the CLI"
+    scope: ALWAYS
+  - text: "Interactive prompts need terminal access (set pty=true if required)"
+    scope: ALWAYS
+  - text: "Use memory tool for agent-internal notes, not Apple Notes"
+    scope: ALWAYS
+
+related:
+  - name: obsidian
+    relationship: alternative_to
+    description: "Obsidian for Markdown-native knowledge management"

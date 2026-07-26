@@ -1,0 +1,134 @@
+skill:
+  name: comfyui
+  version: 5.1.0
+  summary: Generate images, video, and audio with ComfyUI — install, manage nodes/models, run workflows
+  author: kshitijk4poor, alt-glitch, purzbeats
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [comfyui, stable diffusion, SDXL, Flux, SD3, image generation, video generation, comfy-cli]
+  intents: [generate_image_comfyui, run_comfyui_workflow, manage_comfyui, install_comfyui]
+  patterns:
+    - "(generate|create) .*(image|video|audio) .*(comfyui|comfy|stable diffusion|SDXL|flux)"
+    - "(run|execute) .*(comfyui|comfy) .*(workflow|pipeline)"
+    - "(install|setup|launch) .*(comfyui|comfy)"
+
+requires:
+  env_optional: [COMFY_CLOUD_API_KEY]
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+  binaries: [python3, curl]
+
+provides:
+  capabilities: [image_generation, video_generation, workflow_execution, comfyui_management]
+  output_types: [.png, .jpg, .mp4]
+
+actions:
+
+  detect_environment:
+    description: Check what's available and whether hardware can run ComfyUI locally
+    trigger_phrases: ["check environment", "detect hardware", "what's available"]
+    rules:
+      - priority: HIGH
+        text: "Run hardware_check.py FIRST to decide local vs Comfy Cloud"
+      - priority: HIGH
+        text: "Ask user: local or Cloud? Don't start installing until they answer"
+      - priority: NORMAL
+        text: "Verdict: ok (local install), marginal (light workflows), cloud (switch to cloud)"
+    data:
+      - key: hardware_check_command
+        string_value: "python3 scripts/hardware_check.py --json"
+      - key: verdicts
+        list_value:
+          items: [{ string_value: "ok" }, { string_value: "marginal" }, { string_value: "cloud" }]
+
+  setup_comfyui:
+    description: Install and configure ComfyUI
+    trigger_phrases: ["install comfyui", "setup comfyui", "set up comfy"]
+    rules:
+      - priority: CRITICAL
+        text: "Ask Local vs Cloud FIRST — don't start install until user answers"
+      - priority: HIGH
+        text: "Cloud: sign up at comfy.org, generate API key, set COMFY_CLOUD_API_KEY"
+      - priority: HIGH
+        text: "Local: use comfy-cli — pipx install comfy-cli, then comfy install --nvidia"
+      - priority: NORMAL
+        text: "Default install: ~/comfy/ComfyUI (Linux), ~/Documents/comfy/ComfyUI (macOS/Win)"
+    data:
+      - key: install_commands
+        list_value:
+          items:
+            - { string_value: "pipx install comfy-cli" }
+            - { string_value: "comfy --skip-prompt install --nvidia" }
+            - { string_value: "comfy launch --background" }
+      - key: cloud_setup
+        list_value:
+          items:
+            - { string_value: "export COMFY_CLOUD_API_KEY='comfyui-...'" }
+            - { string_value: "--host https://cloud.comfy.org" }
+
+  get_workflow:
+    description: Obtain a workflow JSON in API format
+    trigger_phrases: ["get workflow", "load workflow", "export workflow"]
+    rules:
+      - priority: CRITICAL
+        text: "Workflows MUST be in API format (each node has class_type) — editor format is NOT executable"
+      - priority: HIGH
+        text: "Sources: ComfyUI web UI → Export (API), skill workflows/ directory, community downloads"
+      - priority: NORMAL
+        text: "extract_schema.py lists controllable params + model deps"
+
+  run_workflow:
+    description: Execute workflow with parameter injection
+    trigger_phrases: ["run workflow", "generate image", "execute workflow"]
+    rules:
+      - priority: CRITICAL
+        text: "Server must be running — verify with curl http://127.0.0.1:8188/system_stats"
+      - priority: HIGH
+        text: "Use run_workflow.py for single runs, run_batch.py for sweeps/parallel"
+      - priority: HIGH
+        text: "seed: -1 generates fresh random seed per run"
+      - priority: NORMAL
+        text: "Use --input-image for img2img/inpaint workflows"
+    data:
+      - key: run_command
+        string_value: "python3 scripts/run_workflow.py --workflow W --args '{...}' --output-dir ./outputs"
+      - key: batch_command
+        string_value: "python3 scripts/run_batch.py --workflow W --args '{...}' --count 8 --randomize-seed"
+      - key: health_check
+        string_value: "python3 scripts/health_check.py"
+
+  manage_nodes_models:
+    description: Install custom nodes and download models
+    trigger_phrases: ["install node", "download model", "manage comfyui"]
+    rules:
+      - priority: HIGH
+        text: "Nodes: comfy node install <name>. Models: comfy model download --url <url> --relative-path models/checkpoints"
+      - priority: NORMAL
+        text: "check_deps.py reports missing nodes/models; auto_fix_deps.py installs them"
+    data:
+      - key: node_commands
+        list_value:
+          items:
+            - { string_value: "comfy node install comfyui-impact-pack" }
+            - { string_value: "comfy node install comfyui-animatediff-evolved" }
+            - { string_value: "comfy node install-deps --workflow=workflow.json" }
+            - { string_value: "comfy node update all" }
+      - key: model_command
+        string_value: "comfy model download --url URL --relative-path models/checkpoints"
+
+guardrails:
+  - text: "API format required — scripts detect editor format and tell you to re-export"
+    scope: ALWAYS
+  - text: "Server must be running for all execution — verify with system_stats"
+    scope: ALWAYS
+  - text: "Workflow JSON is arbitrary code — inspect workflows from untrusted sources before running"
+    scope: ALWAYS
+  - text: "Path traversal protection: keep safe_path_join on for output filenames"
+    scope: ALWAYS
+
+related: [stable-diffusion-image-generation, image_gen]

@@ -1,0 +1,39 @@
+{
+  "profile": "https://ion.matrixmcl.com/spec/agent-account/v1",
+  "discovery": {
+    "origin": "https://accounts.example",
+    "rp_id": "accounts.example",
+    "available_scopes": ["draft", "read", "submit-with-approval"]
+  },
+  "signup_choices": ["sign-in", "human", "agent"],
+  "challenge_cases": [
+    {
+      "name": "exact origin and least authority",
+      "origin": "https://accounts.example",
+      "rp_id": "accounts.example",
+      "scopes": ["read"],
+      "valid": true
+    },
+    {
+      "name": "origin confusion",
+      "origin": "https://phishing.example",
+      "rp_id": "phishing.example",
+      "scopes": ["read"],
+      "valid": false
+    },
+    {
+      "name": "RP ID confusion",
+      "origin": "https://accounts.example",
+      "rp_id": "example",
+      "scopes": ["read"],
+      "valid": false
+    },
+    {
+      "name": "scope escalation",
+      "origin": "https://accounts.example",
+      "rp_id": "accounts.example",
+      "scopes": ["administrator"],
+      "valid": false
+    }
+  ]
+}

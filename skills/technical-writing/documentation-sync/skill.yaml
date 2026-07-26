@@ -1,0 +1,111 @@
+skill:
+  name: documentation-sync
+  version: 1.0.0
+  summary: Rewrite documentation files to match their source-of-truth code
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [documentation, docs, sync docs, update docs, stale docs, rewrite docs]
+  intents: [sync_documentation, update_docs, rewrite_docs, regenerate_docs]
+  patterns:
+    - "(rewrite|update|sync|regenerate) .*(documentation|docs)"
+    - "docs are (stale|outdated|old)"
+    - "(documentation|docs) .*(out of date|stale|behind)"
+
+requires:
+  tools:
+    - name: read_file
+      required: true
+    - name: write_file
+      required: true
+    - name: search_files
+      required: true
+    - name: terminal
+      required: false
+
+provides:
+  capabilities: [documentation_sync, documentation_rewrite]
+  output_types: [.md]
+
+actions:
+
+  read_sources:
+    description: Read all source files in parallel to understand current system state
+    trigger_phrases: ["read source code", "analyze source files"]
+    rules:
+      - priority: CRITICAL
+        text: "Batch all independent source file reads into a single parallel call — most efficient approach"
+      - priority: HIGH
+        text: "Extract key facts, structures, APIs, and patterns from source"
+      - priority: HIGH
+        text: "Note discrepancies with existing documentation"
+      - priority: NORMAL
+        text: "Do not read source files sequentially when they are independent"
+
+  read_docs:
+    description: Read existing documentation to understand current structure and style
+    trigger_phrases: ["read existing docs", "check current documentation"]
+    rules:
+      - priority: HIGH
+        text: "Understand current structure: frontmatter, sections, tables, formatting conventions"
+      - priority: HIGH
+        text: "Identify what is still accurate vs. what needs updating"
+      - priority: NORMAL
+        text: "Read existing docs in parallel for efficiency"
+
+  rewrite:
+    description: Systematically rewrite documentation files one at a time
+    trigger_phrases: ["rewrite documentation", "update docs", "sync docs with code"]
+    rules:
+      - priority: CRITICAL
+        text: "Do not invent content — every claim should be traceable to source code"
+      - priority: HIGH
+        text: "Start with most foundational files (the ones others reference)"
+      - priority: HIGH
+        text: "Maintain consistent style across all files"
+      - priority: HIGH
+        text: "Preserve existing structure where it works, update what doesn't"
+      - priority: NORMAL
+        text: "Use tables for structured data, code blocks for commands"
+      - priority: NORMAL
+        text: "Write files sequentially — do not write all files in one batch"
+
+  verify:
+    description: Verification pass after all files are written
+    trigger_phrases: ["verify documentation", "check docs consistency"]
+    rules:
+      - priority: CRITICAL
+        text: "Do not skip the verification pass — it catches inconsistencies easy to miss during writing"
+      - priority: HIGH
+        text: "Use search_files to check for forbidden patterns across all output files"
+      - priority: HIGH
+        text: "Cross-check key facts against source code"
+      - priority: HIGH
+        text: "Verify frontmatter is correct and consistent across files"
+      - priority: NORMAL
+        text: "Check cross-file consistency: terminology, formatting"
+    data:
+      - key: verification_checklist
+        list_value:
+          items:
+            - { string_value: "All source files read and understood" }
+            - { string_value: "Existing documentation structure preserved where appropriate" }
+            - { string_value: "All stale content updated with source-backed facts" }
+            - { string_value: "No forbidden patterns found (search across all output files)" }
+            - { string_value: "Frontmatter is correct and consistent" }
+            - { string_value: "Cross-file consistency verified (terminology, formatting)" }
+            - { string_value: "Every claim traceable to source code" }
+
+guardrails:
+  - text: "Do not invent content — every claim must be traceable to source code"
+    scope: ALWAYS
+  - text: "Do not skip the verification pass"
+    scope: ALWAYS
+  - text: "Do not mix source-backed facts with assumptions"
+    scope: ALWAYS
+  - text: "Write files sequentially, not all in one batch"
+    scope: WRITE_OPS
+
+related: []

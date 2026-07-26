@@ -1,0 +1,10 @@
+# Example override for the real chart at deploy/helm/ion.
+# Create ion-office-secrets separately; never put the JWT value in this file.
+office:
+  enabled: true
+  image:
+    repository: onlyoffice/documentserver
+    tag: "9.2.0.1"
+  jwt:
+    existingSecret: ion-office-secrets
+    secretKey: jwt-secret

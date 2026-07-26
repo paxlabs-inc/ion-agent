@@ -1,0 +1,130 @@
+skill:
+  name: manim-video
+  version: 1.0.0
+  summary: "Manim CE animations — 3Blue1Brown-style math/algo explainer videos"
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [manim, animation, math video, 3blue1brown, explainer video, algorithm visualization, equation derivation]
+  intents: [create_animation, math_explanation, algorithm_walkthrough, concept_visualization]
+  patterns:
+    - "(create|make|build) .*(animation|video|explainer)"
+    - "(animate|visualize) .*(math|algorithm|equation|concept)"
+    - "3blue1brown"
+    - "manim"
+
+requires:
+  tools:
+    - name: write_file
+      required: true
+    - name: terminal
+      required: true
+  binaries: [python3, manim, ffmpeg, latex]
+
+provides:
+  capabilities: [math_animations, algorithm_visualizations, equation_derivations, data_stories]
+  output_types: [.mp4, .png]
+
+actions:
+
+  plan_animation:
+    description: Create narrative plan before writing any code
+    trigger_phrases: ["plan animation", "plan video", "design the narrative"]
+    rules:
+      - priority: CRITICAL
+        text: "Before writing code, create plan.md with: narrative arc, scene list, visual elements, color palette, voiceover script."
+      - priority: CRITICAL
+        text: "Articulate the narrative arc first: what misconception, what 'aha moment', what visual journey from confusion to clarity."
+      - priority: HIGH
+        text: "Geometry precedes algebra — display the shape first, then the equation."
+      - priority: HIGH
+        text: "First-render excellence is mandatory — output must be visually clear without revision rounds."
+
+  write_scene:
+    description: Write Manim scene code — one class per scene
+    trigger_phrases: ["write manim scene", "code the animation", "create scene"]
+    rules:
+      - priority: CRITICAL
+        text: "One Python script per project. One class per scene. Every scene independently renderable."
+      - priority: CRITICAL
+        text: "Monospace fonts required for all text — Manim's Pango renderer generates broken kerning with proportional fonts."
+      - priority: CRITICAL
+        text: "Always use raw strings for LaTeX: MathTex(r'\\frac{1}{2}') not MathTex('\\frac{1}{2}')."
+      - priority: HIGH
+        text: "Opacity layering: primary 1.0, contextual 0.4, structural (axes/grids) 0.15."
+      - priority: HIGH
+        text: "Every animation needs self.wait() after it — viewer needs time to absorb."
+      - priority: HIGH
+        text: "Shared color constants at file top for cross-scene consistency."
+      - priority: HIGH
+        text: "FadeOut all mobjects at scene end: self.play(FadeOut(Group(*self.mobjects)))."
+      - priority: HIGH
+        text: "Minimum font_size=18 for readability."
+      - priority: NORMAL
+        text: "Per-scene variation: different dominant color, different layout, different animation entry, different visual weight."
+    data:
+      - key: color_palettes
+        map_value:
+          entries:
+            classic_3b1b: { string_value: "BG=#1C1C1C, PRIMARY=#58C4DD, SECONDARY=#83C167, ACCENT=#FFFF00" }
+            warm_academic: { string_value: "BG=#2D2B55, PRIMARY=#FF6B6B, SECONDARY=#FFD93D, ACCENT=#6BCB77" }
+            neon_tech: { string_value: "BG=#0A0A0A, PRIMARY=#00F5FF, SECONDARY=#FF00FF, ACCENT=#39FF14" }
+            monochrome: { string_value: "BG=#1A1A2E, PRIMARY=#EAEAEA, SECONDARY=#888888, ACCENT=#FFFFFF" }
+      - key: typography_scale
+        map_value:
+          entries:
+            title: { int_value: 48 }
+            heading: { int_value: 36 }
+            body: { int_value: 30 }
+            label: { int_value: 24 }
+            caption: { int_value: 20 }
+      - key: animation_speeds
+        map_value:
+          entries:
+            title_appear: { string_value: "1.5s run, 1.0s wait" }
+            equation_reveal: { string_value: "2.0s run, 2.0s wait" }
+            transform_morph: { string_value: "1.5s run, 1.5s wait" }
+            aha_moment: { string_value: "2.5s run, 3.0s wait" }
+    examples:
+      - label: "basic scene with color constants"
+        language: python
+        code: |
+          from manim import *
+          BG = "#1C1C1C"; PRIMARY = "#58C4DD"; MONO = "Menlo"
+          class Scene1_Intro(Scene):
+              def construct(self):
+                  self.camera.background_color = BG
+                  title = Text("Why Does This Work?", font_size=48, color=PRIMARY, weight=BOLD, font=MONO)
+                  self.play(Write(title), run_time=1.5)
+                  self.wait(1.0)
+                  self.play(FadeOut(title), run_time=0.5)
+
+  render_and_stitch:
+    description: Render scenes and stitch into final video
+    trigger_phrases: ["render animation", "stitch scenes", "produce video"]
+    rules:
+      - priority: HIGH
+        text: "Draft: manim -ql script.py SceneName. Production: manim -qh script.py SceneName."
+      - priority: HIGH
+        text: "Stitch with ffmpeg -f concat -safe 0 -i concat.txt -c copy final.mp4."
+      - priority: NORMAL
+        text: "Always iterate at -ql (854x480 15fps). Only render -qh (1920x1080 60fps) for final."
+    data:
+      - key: quality_presets
+        map_value:
+          entries:
+            draft: { string_value: "-ql 854x480 15fps 5-15s/scene" }
+            medium: { string_value: "-qm 1280x720 30fps 15-60s/scene" }
+            production: { string_value: "-qh 1920x1080 60fps 30-120s/scene" }
+
+guardrails:
+  - text: "Never use non-monospace fonts for text — Manim Pango renderer breaks kerning"
+    scope: ALWAYS
+  - text: "Always use raw strings (r-prefix) for LaTeX in MathTex"
+    scope: ALWAYS
+  - text: "buff >= 0.5 for edge text positioning — never less"
+    scope: ALWAYS
+
+related: []

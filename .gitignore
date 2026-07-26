@@ -1,0 +1,92 @@
+# Ion
+# The agent that is alive
+
+# === Binaries ===
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/ion
+
+# === Test ===
+*.test
+*.out
+coverage.out
+coverage.html
+*.prof
+__pycache__/
+*.py[cod]
+
+# === Build ===
+/dist/
+/build/
+/output/
+*.o
+*.a
+/spec/specgen/specgen
+
+# === Rust ===
+/target/
+**/target/
+**/*.rs.bk
+
+# === Node ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.*
+.dashboard-dist/
+/ui/web/test-results/
+/ui/web/playwright-report/
+/ui/tui/dist/*
+!/ui/tui/dist/ion-tui.mjs
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+
+# === Data ===
+.ion/
+*.db
+*.db-wal
+*.db-shm
+*.journal
+mmr.dat
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Logs ===
+*.log
+air.log
+logs/
+
+# === Temp ===
+tmp/
+temp/
+mcp/
+/research/
+.mimocode/
+.claude/settings.local.json

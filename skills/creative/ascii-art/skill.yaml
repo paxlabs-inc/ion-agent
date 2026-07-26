@@ -1,0 +1,145 @@
+skill:
+  name: ascii-art
+  version: 4.0.0
+  summary: ASCII art toolkit — pyfiglet, cowsay, boxes, image-to-ascii, QR codes, weather art
+  author: 0xbyt4, Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [ASCII art, text banner, cowsay, boxes, pyfiglet, figlet, image to ASCII, QR code]
+  intents: [create_ascii_art, text_banner, ascii_border, image_to_ascii]
+  patterns:
+    - "(create|make|generate) .*(ASCII|text) .*(art|banner|border)"
+    - "(cowsay|boxes|pyfiglet|figlet)"
+    - "(convert|transform) .*(image|picture) .*(ASCII|text)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+  binaries: [python3, curl]
+
+provides:
+  capabilities: [ascii_art, text_banners, message_art, decorative_borders, image_to_ascii]
+  output_types: [.txt]
+
+actions:
+
+  text_banner:
+    description: Transform text into large ASCII art banners
+    trigger_phrases: ["text banner", "ASCII banner", "big text"]
+    rules:
+      - priority: HIGH
+        text: "Use pyfiglet if installed, otherwise fall back to asciified API via curl"
+      - priority: HIGH
+        text: "Preview 2-3 fonts and let user pick their favorite"
+      - priority: NORMAL
+        text: "Short text (1-8 chars) works best with doom/block fonts; long text with small/mini"
+    data:
+      - key: pyfiglet_command
+        string_value: "python3 -m pyfiglet 'TEXT' -f slant"
+      - key: asciified_api
+        string_value: "https://asciified.thelicato.io/api/v2/ascii?text=Hello+World"
+      - key: recommended_fonts
+        map_value:
+          entries:
+            clean_modern: { string_value: "slant" }
+            bold_blocky: { string_value: "doom" }
+            big_readable: { string_value: "big" }
+            classic_banner: { string_value: "banner3" }
+            compact: { string_value: "small" }
+            cyberpunk: { string_value: "cyberlarge" }
+
+  cowsay_art:
+    description: Wrap text in speech bubbles with ASCII characters
+    trigger_phrases: ["cowsay", "message art", "speech bubble"]
+    rules:
+      - priority: NORMAL
+        text: "50+ characters available: default, tux, dragon, stegosaurus, vader, etc."
+      - priority: NORMAL
+        text: "Eye modifiers: -b borg, -d dead, -g greedy, -p paranoid, -s stoned, -w wired"
+    data:
+      - key: install_command
+        string_value: "sudo apt install cowsay -y"
+      - key: characters
+        list_value:
+          items:
+            - { string_value: "default" }
+            - { string_value: "tux" }
+            - { string_value: "dragon" }
+            - { string_value: "stegosaurus" }
+            - { string_value: "vader" }
+            - { string_value: "kitty" }
+
+  decorative_border:
+    description: Draw ornamental ASCII art borders/frames around text
+    trigger_phrases: ["boxes", "decorative border", "frame text"]
+    rules:
+      - priority: NORMAL
+        text: "70+ built-in designs: stone, parchment, cat, dog, diamonds, c-cmt, html-cmt"
+      - priority: NORMAL
+        text: "Can combine with pyfiglet: python3 -m pyfiglet 'ION' -f slant | boxes -d stone"
+    data:
+      - key: install_command
+        string_value: "sudo apt install boxes -y"
+
+  image_to_ascii:
+    description: Convert images (PNG, JPEG, GIF, WEBP) to ASCII art
+    trigger_phrases: ["image to ASCII", "convert image to ASCII", "ASCII from image"]
+    rules:
+      - priority: HIGH
+        text: "Option A: ascii-image-converter (recommended, modern) — supports color, braille, dimensions"
+      - priority: NORMAL
+        text: "Option B: jp2a (lightweight, JPEG only)"
+      - priority: NORMAL
+        text: "ascii-image-converter: sudo snap install ascii-image-converter"
+    data:
+      - key: recommended_tool
+        string_value: "ascii-image-converter"
+      - key: commands
+        list_value:
+          items:
+            - { string_value: "ascii-image-converter image.png" }
+            - { string_value: "ascii-image-converter image.png -C" }
+            - { string_value: "ascii-image-converter image.png -d 60,30" }
+
+  search_pre_made:
+    description: Search curated ASCII art from the web
+    trigger_phrases: ["find ASCII art", "search ASCII art", "pre-made ASCII"]
+    rules:
+      - priority: HIGH
+        text: "Source: ascii.co.uk/art/{subject} — fetch with curl, extract from <pre> tags"
+      - priority: NORMAL
+        text: "Subjects: animals (cat, dog, dragon), objects (rocket, guitar), nature (tree, moon), characters (skull, robot)"
+      - priority: NORMAL
+        text: "Preserve artist signatures/initials — important etiquette"
+    data:
+      - key: url_pattern
+        string_value: "https://ascii.co.uk/art/{subject}"
+
+  llm_custom_art:
+    description: Generate custom ASCII art using Unicode character palette
+    trigger_phrases: ["custom ASCII art", "generate ASCII art", "create ASCII"]
+    rules:
+      - priority: HIGH
+        text: "Max width: 60 characters per line (terminal-safe)"
+      - priority: HIGH
+        text: "Max height: 15 lines for banners, 25 for scenes"
+      - priority: NORMAL
+        text: "Monospace only — output must render correctly in fixed-width fonts"
+    data:
+      - key: box_drawing_chars
+        string_value: "╔ ╗ ╚ ╝ ║ ═ ╠ ╣ ╦ ╩ ╬ ┌ ┐ └ ┘ │ ─ ├ ┤ ┬ ┴ ┼ ╭ ╮ ╰ ╯"
+      - key: block_elements
+        string_value: "░ ▒ ▓ █ ▄ ▀ ▌ ▐ ▖ ▗ ▘ ▝ ▚ ▞"
+      - key: geometric_symbols
+        string_value: "◆ ◇ ◈ ● ○ ◉ ■ □ ▲ △ ▼ ▽ ★ ☆ ✦ ✧ ◀ ▶ ◁ ▷ ⬡ ⬢ ⌂"
+
+guardrails:
+  - text: "Always offer multiple options — pyfiglet, cowsay, boxes, ascii.co.uk — pick best fit"
+    scope: ALWAYS
+
+related: [excalidraw]

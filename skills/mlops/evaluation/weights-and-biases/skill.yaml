@@ -1,0 +1,180 @@
+skill:
+  name: weights-and-biases
+  version: 1.0.0
+  summary: "W&B: log ML experiments, sweeps, model registry, dashboards"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [wandb, weights and biases, experiment tracking, hyperparameter sweep, model registry, training dashboard, wandb logging]
+  intents: [track_experiment, run_sweep, log_metrics, compare_runs, manage_models]
+  patterns:
+    - "(track|log|monitor) .*(experiment|training|metrics|loss)"
+    - "(wandb|weights.and.biases)"
+    - "(hyperparameter|hp) .*(sweep|tuning|search)"
+    - "model (registry|versioning|lineage)"
+
+requires:
+  env_optional: [WANDB_API_KEY]
+  tools:
+    - name: terminal
+      required: true
+  binaries: [pip, python3]
+
+provides:
+  capabilities: [experiment_tracking, hyperparameter_sweeps, model_registry, metric_visualization, artifact_tracking]
+  output_types: []
+
+actions:
+
+  setup:
+    description: Install and authenticate W&B
+    trigger_phrases: ["set up wandb", "install weights and biases", "configure wandb"]
+    rules:
+      - priority: CRITICAL
+        text: "pip install wandb then wandb login (or set WANDB_API_KEY env var)"
+      - priority: HIGH
+        text: "Free tier: unlimited public projects, 100GB storage"
+      - priority: NORMAL
+        text: "Academic: free for students/researchers"
+    data:
+      - key: install_command
+        string_value: "pip install wandb"
+      - key: auth_command
+        string_value: "wandb login"
+
+  basic_tracking:
+    description: Initialize a W&B run and log training metrics
+    trigger_phrases: ["start tracking", "log training run", "initialize wandb run", "track this experiment"]
+    rules:
+      - priority: CRITICAL
+        text: "Always call wandb.finish() at the end of training"
+      - priority: HIGH
+        text: "Pass config dict with hyperparameters to wandb.init() for automatic tracking"
+      - priority: HIGH
+        text: "Use hierarchical keys: train/loss, val/accuracy for organized dashboards"
+      - priority: NORMAL
+        text: "Use descriptive run names like bert-base-lr0.001-bs32-epoch10"
+    examples:
+      - label: "basic experiment tracking"
+        language: python
+        code: |
+          import wandb
+          run = wandb.init(
+              project="my-project",
+              config={"learning_rate": 0.001, "epochs": 10, "batch_size": 32}
+          )
+          for epoch in range(run.config.epochs):
+              train_loss = train_epoch()
+              wandb.log({"epoch": epoch, "train/loss": train_loss, "val/loss": val_loss})
+          wandb.finish()
+
+  pytorch_tracking:
+    description: W&B integration with PyTorch training loops
+    trigger_phrases: ["wandb pytorch", "track pytorch training"]
+    rules:
+      - priority: HIGH
+        text: "Access config via wandb.config inside training loop"
+      - priority: NORMAL
+        text: "Log every N batches to avoid overhead: if batch_idx % 100 == 0"
+    examples:
+      - label: "pytorch integration"
+        language: python
+        code: |
+          import wandb
+          wandb.init(project="pytorch-demo", config={"lr": 0.001, "epochs": 10})
+          config = wandb.config
+          for epoch in range(config.epochs):
+              for batch_idx, (data, target) in enumerate(train_loader):
+                  loss = train_step(data, target)
+                  if batch_idx % 100 == 0:
+                      wandb.log({"loss": loss.item(), "epoch": epoch})
+          wandb.finish()
+
+  hyperparameter_sweeps:
+    description: Automated hyperparameter optimization with W&B sweeps
+    trigger_phrases: ["hyperparameter sweep", "hp tuning", "sweep config", "optimize hyperparameters"]
+    rules:
+      - priority: CRITICAL
+        text: "Three sweep methods: bayes (recommended), grid, random"
+      - priority: HIGH
+        text: "Define metric with goal (maximize/minimize) in sweep config"
+      - priority: HIGH
+        text: "Use wandb.agent(sweep_id, function=train, count=N) to run trials"
+      - priority: NORMAL
+        text: "Bayesian optimization works best with continuous parameters"
+    data:
+      - key: sweep_methods
+        list_value:
+          items:
+            - { string_value: "bayes: Bayesian optimization (recommended)" }
+            - { string_value: "grid: exhaustive search" }
+            - { string_value: "random: random sampling" }
+    examples:
+      - label: "bayesian sweep setup"
+        language: python
+        code: |
+          sweep_config = {
+              'method': 'bayes',
+              'metric': {'name': 'val/accuracy', 'goal': 'maximize'},
+              'parameters': {
+                  'learning_rate': {'distribution': 'log_uniform', 'min': 1e-5, 'max': 1e-1},
+                  'batch_size': {'values': [16, 32, 64, 128]},
+              }
+          }
+          sweep_id = wandb.sweep(sweep_config, project="my-project")
+          wandb.agent(sweep_id, function=train, count=50)
+
+  artifacts_and_registry:
+    description: Track datasets, models, and artifacts with lineage
+    trigger_phrases: ["log artifact", "model registry", "version model", "track dataset"]
+    rules:
+      - priority: HIGH
+        text: "Use wandb.Artifact for models, datasets, and files"
+      - priority: HIGH
+        text: "Link artifacts to model registry: run.link_artifact(artifact, 'model-registry/production')"
+      - priority: NORMAL
+        text: "Add aliases like 'best', 'production' for version management"
+    examples:
+      - label: "log model artifact"
+        language: python
+        code: |
+          artifact = wandb.Artifact('model', type='model', metadata={'accuracy': 0.95})
+          artifact.add_file('model.pth')
+          wandb.log_artifact(artifact, aliases=['best', 'production'])
+
+  framework_integrations:
+    description: Integrate W&B with HuggingFace, PyTorch Lightning, Keras
+    trigger_phrases: ["wandb huggingface", "wandb lightning", "wandb keras", "integrate wandb"]
+    rules:
+      - priority: HIGH
+        text: "HuggingFace Trainer: set report_to='wandb' in TrainingArguments"
+      - priority: HIGH
+        text: "PyTorch Lightning: use WandbLogger with log_model=True"
+      - priority: NORMAL
+        text: "Keras: add WandbCallback() to model.fit callbacks"
+    examples:
+      - label: "huggingface integration"
+        language: python
+        code: |
+          from transformers import Trainer, TrainingArguments
+          training_args = TrainingArguments(
+              output_dir="./results",
+              report_to="wandb",
+              run_name="bert-finetuning",
+              logging_steps=100
+          )
+
+guardrails:
+  - text: "Always call wandb.finish() at end of training"
+    scope: WRITE_OPS
+  - text: "Use WANDB_MODE=offline for unstable connections; sync later with wandb sync"
+    scope: ALWAYS
+  - text: "Never hardcode API keys — use WANDB_API_KEY env var or wandb login"
+    scope: AUTH_OPS
+
+related:
+  - name: evaluating-llms-harness
+    relationship: composes_with
+    description: "Log lm-eval-harness benchmark results to W&B"

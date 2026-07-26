@@ -1,0 +1,19 @@
+{
+  "name": "@matrixmcl/ion-ui",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "web",
+    "tui"
+  ],
+  "scripts": {
+    "generate": "go generate ../internal/controlplane",
+    "check:generated": "go run ../cmd/controlplane-gen -out shared/src/generated/protocol.check.ts && cmp shared/src/generated/protocol.ts shared/src/generated/protocol.check.ts && rm shared/src/generated/protocol.check.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run typecheck",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "check:budgets": "node scripts/check-budgets.mjs"
+  }
+}

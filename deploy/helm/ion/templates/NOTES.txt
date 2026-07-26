@@ -1,0 +1,28 @@
+Ion has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Ion serves plain HTTP on the Pod loopback only. A Caddy sidecar in the same Pod
+exposes it on port {{ .Values.proxy.port }}; the Service forwards to it.
+
+{{- if .Values.ingress.enabled }}
+
+Access:
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+{{- else }}
+
+The Ingress is disabled. Reach the operator by port-forwarding the Service:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ion.fullname" . }} 8080:{{ .Values.service.port }}
+  open http://127.0.0.1:8080
+{{- end }}
+
+{{- if not .Values.ion.autoInit }}
+
+The vault is NOT auto-initialized. Initialize it once against your chosen key
+source:
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "ion.fullname" . }} -c ion -- ion init --data-dir {{ .Values.ion.dataDir }}
+
+The development file KEK is not a production mechanism. See SECURITY.md.
+{{- end }}

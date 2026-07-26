@@ -1,0 +1,169 @@
+skill:
+  name: arxiv
+  version: 1.0.0
+  summary: "Search arXiv papers by keyword, author, category, or ID; Semantic Scholar citations"
+  author: Ion Agent
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [arxiv, arXiv, paper search, academic paper, semantic scholar, bibtex, citation]
+  intents: [search_papers, get_paper, read_abstract, generate_bibtex, find_citations, find_references]
+  patterns:
+    - "(search|find|look up) .*(paper|arxiv|academic)"
+    - "arxiv\\.org/(abs|pdf)/"
+    - "(generate|create) .*(bibtex|citation)"
+    - "(who cited|citations of|references from)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: web_extract
+      required: false
+  binaries: [curl, python3]
+
+provides:
+  capabilities: [arxiv_search, arxiv_fetch, bibtex_generation, semantic_scholar_citations, paper_reading]
+  output_types: [.bib]
+
+actions:
+
+  search_papers:
+    description: Search arXiv for papers by keyword, author, or category
+    trigger_phrases: ["search arxiv", "find papers about", "search for papers", "arxiv search"]
+    rules:
+      - priority: CRITICAL
+        text: "arXiv API returns Atom XML — use helper script or python3 parsing for clean output"
+      - priority: CRITICAL
+        text: "Rate limit: ~1 request per 3 seconds for arXiv API"
+      - priority: HIGH
+        text: "Search query prefixes: all: (all fields), ti: (title), au: (author), abs: (abstract), cat: (category)"
+      - priority: HIGH
+        text: "Boolean operators: + for AND, OR, ANDNOT. Exact phrases in double quotes"
+      - priority: NORMAL
+        text: "Sort options: sortBy=relevance|lastUpdatedDate|submittedDate, sortOrder=ascending|descending"
+      - priority: NORMAL
+        text: "max_results default 10, max 30000. Use start for pagination"
+    data:
+      - key: api_base_url
+        string_value: "https://export.arxiv.org/api/query"
+      - key: common_categories
+        map_value:
+          entries:
+            "cs.AI": { string_value: "Artificial Intelligence" }
+            "cs.CL": { string_value: "Computation and Language (NLP)" }
+            "cs.CV": { string_value: "Computer Vision" }
+            "cs.LG": { string_value: "Machine Learning" }
+            "cs.CR": { string_value: "Cryptography and Security" }
+            "stat.ML": { string_value: "Machine Learning (Statistics)" }
+    examples:
+      - label: "search by keyword with clean output"
+        language: bash
+        code: |
+          curl -s "https://export.arxiv.org/api/query?search_query=all:GRPO+reinforcement+learning&max_results=5&sortBy=submittedDate&sortOrder=descending" | python3 -c "
+          import sys, xml.etree.ElementTree as ET
+          ns = {'a': 'http://www.w3.org/2005/Atom'}
+          root = ET.parse(sys.stdin).getroot()
+          for i, entry in enumerate(root.findall('a:entry', ns)):
+              title = entry.find('a:title', ns).text.strip().replace('\n', ' ')
+              arxiv_id = entry.find('a:id', ns).text.strip().split('/abs/')[-1]
+              published = entry.find('a:published', ns).text[:10]
+              print(f'{i+1}. [{arxiv_id}] {title} ({published})')
+          "
+
+  fetch_paper:
+    description: Fetch a specific paper by arXiv ID
+    trigger_phrases: ["get paper", "fetch paper", "arxiv paper", "read paper"]
+    rules:
+      - priority: HIGH
+        text: "By arXiv ID: curl 'https://export.arxiv.org/api/query?id_list=2402.03300'"
+      - priority: HIGH
+        text: "Multiple papers: comma-separated IDs in id_list parameter"
+      - priority: HIGH
+        text: "Read abstract page: web_extract(urls=['https://arxiv.org/abs/ID'])"
+      - priority: HIGH
+        text: "Read full paper: web_extract(urls=['https://arxiv.org/pdf/ID'])"
+      - priority: NORMAL
+        text: "arXiv IDs: old format (hep-th/0601001) vs new (2402.03300)"
+      - priority: NORMAL
+        text: "Versioned URLs: abs/1706.03762 resolves to latest, abs/1706.03762v1 to specific version"
+      - priority: NORMAL
+        text: "Check for withdrawn papers: summary field contains withdrawal notice"
+    data:
+      - key: url_patterns
+        map_value:
+          entries:
+            abstract: { string_value: "https://arxiv.org/abs/{id}" }
+            pdf: { string_value: "https://arxiv.org/pdf/{id}" }
+            html: { string_value: "https://arxiv.org/html/{id}" }
+            api: { string_value: "https://export.arxiv.org/api/query?id_list={id}" }
+
+  generate_bibtex:
+    description: Generate BibTeX entry from arXiv metadata
+    trigger_phrases: ["generate bibtex", "create citation", "bibtex for paper"]
+    rules:
+      - priority: CRITICAL
+        text: "NEVER generate BibTeX from memory — always fetch metadata programmatically from arXiv API"
+      - priority: HIGH
+        text: "Parse XML response to extract: title, authors, year, arxiv_id, primary_category"
+      - priority: HIGH
+        text: "Citation key format: LastName{Year}_{arxivid_no_dots}"
+      - priority: NORMAL
+        text: "Preserve version suffix in URL when citing a specific version read"
+    examples:
+      - label: "fetch and generate bibtex"
+        language: bash
+        code: |
+          curl -s "https://export.arxiv.org/api/query?id_list=1706.03762" | python3 -c "
+          import sys, xml.etree.ElementTree as ET
+          ns = {'a': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
+          root = ET.parse(sys.stdin).getroot()
+          entry = root.find('a:entry', ns)
+          title = entry.find('a:title', ns).text.strip().replace('\n', ' ')
+          authors = ' and '.join(a.find('a:name', ns).text for a in entry.findall('a:author', ns))
+          year = entry.find('a:published', ns).text[:4]
+          raw_id = entry.find('a:id', ns).text.strip().split('/abs/')[-1]
+          last_name = entry.find('a:author', ns).find('a:name', ns).text.split()[-1]
+          print(f'@article{{{last_name}{year}_{raw_id.replace(\".\", \"\")},')
+          print(f'  title = {{{title}}},')
+          print(f'  author = {{{authors}}},')
+          print(f'  year = {{{year}}},')
+          print(f'  eprint = {{{raw_id}}},')
+          print(f'  url = {{https://arxiv.org/abs/{raw_id}}}')
+          print('}')
+          "
+
+  semantic_scholar:
+    description: Use Semantic Scholar API for citations, references, and author profiles
+    trigger_phrases: ["who cited", "citations of", "references from", "paper impact", "citation count"]
+    rules:
+      - priority: HIGH
+        text: "Semantic Scholar: free, 1 req/sec without API key, 100/sec with key"
+      - priority: HIGH
+        text: "Paper details: GET /graph/v1/paper/arXiv:{id}?fields=title,authors,citationCount"
+      - priority: HIGH
+        text: "Citations OF a paper: GET /graph/v1/paper/arXiv:{id}/citations"
+      - priority: HIGH
+        text: "References FROM a paper: GET /graph/v1/paper/arXiv:{id}/references"
+      - priority: NORMAL
+        text: "Search: GET /graph/v1/paper/search?query=...&fields=title,authors,year,citationCount"
+      - priority: NORMAL
+        text: "Recommendations: POST /recommendations/v1/papers/ with positivePaperIds"
+      - priority: NORMAL
+        text: "Useful fields: title, authors, year, abstract, citationCount, referenceCount, influentialCitationCount, isOpenAccess, externalIds"
+    data:
+      - key: api_base
+        string_value: "https://api.semanticscholar.org/graph/v1"
+      - key: rate_limit
+        string_value: "1 req/sec (no key), 100 req/sec (with key)"
+
+guardrails:
+  - text: "Never generate BibTeX from memory — always fetch programmatically"
+    scope: ALWAYS
+  - text: "Respect arXiv rate limit of ~1 request per 3 seconds"
+    scope: ALWAYS
+  - text: "Check for withdrawn papers before treating results as valid"
+    scope: ALWAYS
+
+related: []

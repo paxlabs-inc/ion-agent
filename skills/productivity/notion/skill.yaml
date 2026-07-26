@@ -1,0 +1,228 @@
+skill:
+  name: notion
+  version: 2.0.0
+  summary: Notion API + ntn CLI — pages, databases, markdown, Workers
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [notion, ntn, notion api, notion page, notion database, notion worker]
+  intents: [notion_read, notion_write, notion_search, notion_query, notion_upload, notion_worker]
+  patterns:
+    - "(read|write|create|update|search|query) .*(notion|page|database)"
+    - "notion .*(page|database|worker|api)"
+    - "upload .*(notion|file)"
+
+requires:
+  env_all: [NOTION_API_KEY]
+  optional_env: [NOTION_WORKSPACE_ID]
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: false
+  binaries: [curl]
+
+provides:
+  capabilities: [notion_read, notion_write, notion_search, notion_database, notion_workers, notion_markdown]
+  output_types: [.md]
+
+related: []
+
+actions:
+
+  setup:
+    description: First-time Notion setup — get token and install CLI
+    trigger_phrases: ["set up notion", "configure notion", "notion setup"]
+    rules:
+      - priority: CRITICAL
+        text: "Create integration at https://notion.so/my-integrations, copy API key"
+      - priority: CRITICAL
+        text: "Store NOTION_API_KEY in ${ION_HOME:-~/.ion}/.env"
+      - priority: CRITICAL
+        text: "Share target pages/databases with the integration in Notion (page menu ... → Connect to). Without this, API returns 404."
+      - priority: HIGH
+        text: "Install ntn CLI: curl -fsSL https://ntn.dev | bash (macOS/Linux only)"
+      - priority: HIGH
+        text: "Skip ntn login — use integration token directly: NOTION_API_TOKEN=$NOTION_API_KEY, NOTION_KEYRING=0"
+    data:
+      - key: env_setup
+        list_value:
+          items:
+            - { string_value: "NOTION_API_KEY=ntn_your_key_here" }
+            - { string_value: "NOTION_API_TOKEN=$NOTION_API_KEY" }
+            - { string_value: "NOTION_KEYRING=0" }
+      - key: api_version
+        string_value: "2025-09-03"
+      - key: ntn_install
+        string_value: "curl -fsSL https://ntn.dev | bash"
+
+  search:
+    description: Search Notion for pages or databases
+    trigger_phrases: ["search notion", "find in notion", "look up in notion"]
+    rules:
+      - priority: HIGH
+        text: "ntn: ntn api v1/search query='page title'"
+      - priority: HIGH
+        text: "curl: POST /v1/search with {query: '...'}"
+    data:
+      - key: ntn_command
+        string_value: "ntn api v1/search query='PAGE_TITLE'"
+      - key: curl_endpoint
+        string_value: "POST https://api.notion.com/v1/search"
+
+  read_page:
+    description: Read a Notion page — metadata, markdown, or blocks
+    trigger_phrases: ["read notion page", "get notion page", "open notion page"]
+    rules:
+      - priority: HIGH
+        text: "For agent-friendly content: use /markdown endpoint (returns readable text)"
+      - priority: HIGH
+        text: "For structured content: use /blocks/{id}/children (returns block JSON)"
+      - priority: NORMAL
+        text: "ntn: ntn api v1/pages/{id}/markdown"
+      - priority: NORMAL
+        text: "Page/database IDs are UUIDs (with or without dashes accepted)"
+    data:
+      - key: endpoints
+        map_value:
+          entries:
+            metadata: { string_value: "GET /v1/pages/{page_id}" }
+            markdown: { string_value: "GET /v1/pages/{page_id}/markdown" }
+            blocks: { string_value: "GET /v1/blocks/{page_id}/children" }
+
+  create_page:
+    description: Create a new Notion page
+    trigger_phrases: ["create notion page", "new notion page", "add page to notion"]
+    rules:
+      - priority: CRITICAL
+        text: "Parent is required — either page_id or database_id"
+      - priority: HIGH
+        text: "POST /v1/pages accepts markdown body param for content"
+      - priority: HIGH
+        text: "For database pages, properties must match the database schema"
+      - priority: NORMAL
+        text: "Use is_inline: true when creating data sources to embed in a page"
+    data:
+      - key: endpoint
+        string_value: "POST https://api.notion.com/v1/pages"
+      - key: property_formats
+        map_value:
+          entries:
+            title: { string_value: '{"title":[{"text":{"content":"..."}}]}' }
+            rich_text: { string_value: '{"rich_text":[{"text":{"content":"..."}}]}' }
+            select: { string_value: '{"select":{"name":"Option"}}' }
+            multi_select: { string_value: '{"multi_select":[{"name":"A"},{"name":"B"}]}' }
+            date: { string_value: '{"date":{"start":"2026-01-15","end":"2026-01-16"}}' }
+            checkbox: { string_value: '{"checkbox":true}' }
+            number: { string_value: '{"number":42}' }
+            url: { string_value: '{"url":"https://..."}' }
+            relation: { string_value: '{"relation":[{"id":"page_id"}]}' }
+
+  update_page:
+    description: Update an existing Notion page or its properties
+    trigger_phrases: ["update notion page", "edit notion page", "change notion page"]
+    rules:
+      - priority: HIGH
+        text: "PATCH /v1/pages/{page_id} for properties, PATCH /v1/pages/{page_id}/markdown for content"
+    data:
+      - key: endpoints
+        map_value:
+          entries:
+            properties: { string_value: "PATCH /v1/pages/{page_id}" }
+            markdown: { string_value: "PATCH /v1/pages/{page_id}/markdown" }
+
+  query_database:
+    description: Query a Notion database (data source)
+    trigger_phrases: ["query notion database", "search notion database", "filter notion"]
+    rules:
+      - priority: CRITICAL
+        text: "As of API 2025-09-03, databases are called 'data sources'. Use /data_sources/ endpoints."
+      - priority: HIGH
+        text: "Two IDs per database: database_id (for creating pages) and data_source_id (for querying)"
+      - priority: HIGH
+        text: "ntn: ntn api v1/data_sources/{id}/query -X POST filter[property]=Status filter[select][equals]=Active"
+      - priority: NORMAL
+        text: "For complex queries with sorts/compound filters, pipe JSON through --json flag"
+    data:
+      - key: endpoint
+        string_value: "POST /v1/data_sources/{data_source_id}/query"
+      - key: id_mapping
+        map_value:
+          entries:
+            create_pages_with: { string_value: "database_id" }
+            query_with: { string_value: "data_source_id" }
+
+  upload_file:
+    description: Upload a file to Notion
+    trigger_phrases: ["upload to notion", "attach file to notion", "add file to notion"]
+    rules:
+      - priority: HIGH
+        text: "ntn CLI: ntn files create < photo.png (one-liner, preferred)"
+      - priority: HIGH
+        text: "HTTP: 3-step flow — create upload → PUT bytes → reference file_upload_id"
+    data:
+      - key: ntn_command
+        string_value: "ntn files create < photo.png"
+      - key: curl_flow
+        list_value:
+          items:
+            - { string_value: "1. POST /v1/file_uploads {filename, content_type}" }
+            - { string_value: "2. PUT {upload_url} --data-binary @file" }
+            - { string_value: "3. Reference {file_upload_id} in page/block payload" }
+
+  manage_workers:
+    description: Build or manage Notion Workers (syncs, tools, webhooks)
+    trigger_phrases: ["notion worker", "create worker", "deploy worker", "notion sync", "notion webhook"]
+    needs_env: [NOTION_API_KEY]
+    rules:
+      - priority: CRITICAL
+        text: "Workers require Business or Enterprise plan"
+      - priority: CRITICAL
+        text: "ntn CLI required — macOS/Linux only. Windows users need WSL2"
+      - priority: HIGH
+        text: "Scaffold: ntn workers new <name>. Code in src/index.ts. Deploy: ntn workers deploy"
+      - priority: HIGH
+        text: "Workers can expose: syncs (scheduled data pulls), tools (callable from Notion agents), webhooks (HTTP event receivers)"
+      - priority: NORMAL
+        text: "Set secrets with ntn workers env set. Webhook URLs are generated by Notion after deploy"
+    data:
+      - key: lifecycle_commands
+        map_value:
+          entries:
+            scaffold: { string_value: "ntn workers new <name>" }
+            deploy: { string_value: "ntn workers deploy" }
+            list: { string_value: "ntn workers list" }
+            execute: { string_value: "ntn workers exec <key> -d '{...}'" }
+            logs: { string_value: "ntn workers runs logs <run-id>" }
+            env_set: { string_value: "ntn workers env set KEY=VALUE" }
+
+  choose_path:
+    description: Decide between ntn CLI and curl for a Notion task
+    trigger_phrases: ["how to use notion", "notion cli vs curl"]
+    rules:
+      - priority: HIGH
+        text: "ntn CLI: preferred on macOS/Linux. Concise syntax, one-liner uploads, required for Workers"
+      - priority: HIGH
+        text: "curl: cross-platform fallback. Works on Windows. Use when ntn not installed"
+      - priority: NORMAL
+        text: "Runtime: if command -v ntn >/dev/null 2>&1; then use ntn; else use curl; fi"
+    data:
+      - key: path_matrix
+        map_value:
+          entries:
+            read_write_pages: { string_value: "ntn api ... | curl" }
+            read_page_for_agent: { string_value: "ntn api v1/pages/{id}/markdown | curl /markdown" }
+            upload_file: { string_value: "ntn files create < file | 3-step HTTP flow" }
+            workers: { string_value: "ntn workers ... (CLI only)" }
+
+guardrails:
+  - text: "Always pass Notion-Version: 2025-09-03 on HTTP requests"
+    scope: ALWAYS
+  - text: "Share pages/databases with integration before API access — 404 means not shared, not missing"
+    scope: ALWAYS
+  - text: "Rate limit ~3 req/s average — CLI doesn't bypass"
+    scope: ALWAYS
+  - text: "Pass -s to curl to suppress progress bars"
+    scope: READ_OPS

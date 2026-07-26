@@ -1,0 +1,175 @@
+skill:
+  name: evaluating-llms-harness
+  version: 1.0.0
+  summary: "lm-eval-harness: benchmark LLMs across 60+ academic tasks (MMLU, GSM8K, HumanEval)"
+  author: Orchestra Research
+  license: MIT
+  platforms: [linux, macos]
+
+triggers:
+  keywords: [lm-eval, lm-evaluation-harness, mmlu, gsm8k, hellaswag, humaneval, truthfulqa, arc, benchmark llm, evaluate llm, model evaluation]
+  intents: [evaluate_model, benchmark_llm, run_benchmark, compare_models]
+  patterns:
+    - "(evaluate|benchmark|assess) .*(model|llm|llama|mistral)"
+    - "(run|execute) .*(mmlu|gsm8k|hellaswag|humaneval|truthfulqa)"
+    - "lm.eval"
+    - "model (comparison|evaluation|benchmark)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  binaries: [pip, python3]
+
+provides:
+  capabilities: [llm_benchmarking, model_evaluation, training_progress_tracking]
+  output_types: [.json]
+
+actions:
+
+  install:
+    description: Install lm-evaluation-harness
+    trigger_phrases: ["install lm-eval", "set up lm-evaluation-harness"]
+    rules:
+      - priority: HIGH
+        text: "pip install lm-eval"
+      - priority: NORMAL
+        text: "For vLLM backend: pip install vllm"
+    data:
+      - key: install_command
+        string_value: "pip install lm-eval"
+
+  run_benchmark:
+    description: Run a model against academic benchmarks
+    trigger_phrases: ["evaluate this model", "run mmlu", "benchmark the model", "test model on gsm8k"]
+    rules:
+      - priority: CRITICAL
+        text: "Standard few-shot count is 5 for most papers (--num_fewshot 5)"
+      - priority: CRITICAL
+        text: "Use exact task names: mmlu, gsm8k, hellaswag, truthfulqa, arc_challenge (not mmlu_direct or mmlu_fewshot)"
+      - priority: HIGH
+        text: "Standard benchmark suite: --tasks mmlu,gsm8k,hellaswag,truthfulqa,arc_challenge"
+      - priority: HIGH
+        text: "Use --batch_size auto for optimal throughput"
+      - priority: HIGH
+        text: "Save results with --output_path and --log_samples"
+      - priority: NORMAL
+        text: "HumanEval requires --allow_code_execution flag and pip install human-eval"
+    data:
+      - key: core_benchmarks
+        map_value:
+          entries:
+            mmlu: { string_value: "57 subjects, multiple choice" }
+            gsm8k: { string_value: "Grade school math word problems" }
+            hellaswag: { string_value: "Common sense reasoning" }
+            truthfulqa: { string_value: "Truthfulness and factuality" }
+            arc_challenge: { string_value: "AI2 Reasoning Challenge" }
+            humaneval: { string_value: "Python code generation (164 problems)" }
+      - key: quick_benchmarks
+        list_value:
+          items:
+            - { string_value: "HellaSwag: ~10 min on 1 GPU" }
+            - { string_value: "GSM8K: ~5 min" }
+            - { string_value: "PIQA: ~2 min" }
+      - key: slow_benchmarks
+        list_value:
+          items:
+            - { string_value: "MMLU: ~2 hours (57 subjects)" }
+            - { string_value: "HumanEval: requires code execution" }
+    examples:
+      - label: "standard HF model evaluation"
+        language: bash
+        code: |
+          lm_eval --model hf \
+            --model_args pretrained=meta-llama/Llama-2-7b-hf,dtype=bfloat16 \
+            --tasks mmlu,gsm8k,hellaswag,truthfulqa,arc_challenge \
+            --num_fewshot 5 \
+            --batch_size auto \
+            --output_path results/ \
+            --log_samples
+      - label: "quantized model"
+        language: bash
+        code: |
+          lm_eval --model hf \
+            --model_args pretrained=meta-llama/Llama-2-7b-hf,load_in_4bit=True \
+            --tasks mmlu \
+            --device cuda:0
+      - label: "view available tasks"
+        language: bash
+        code: "lm_eval --tasks list"
+
+  compare_models:
+    description: Compare multiple models on the same benchmarks
+    trigger_phrases: ["compare models", "model comparison", "which model is better"]
+    rules:
+      - priority: HIGH
+        text: "Run same benchmark suite on all models with identical fewshot count"
+      - priority: HIGH
+        text: "Extract primary metric per task: acc for MMLU, exact_match for GSM8K, acc_norm for HellaSwag"
+      - priority: NORMAL
+        text: "Generate markdown comparison table with pandas"
+    examples:
+      - label: "batch evaluation script"
+        language: bash
+        code: |
+          while read model; do
+            lm_eval --model hf \
+              --model_args pretrained=$model,dtype=bfloat16 \
+              --tasks mmlu,gsm8k,hellaswag,truthfulqa \
+              --num_fewshot 5 \
+              --batch_size auto \
+              --output_path results/$(echo $model | sed 's/\//-/g').json
+          done < models.txt
+
+  track_training:
+    description: Evaluate checkpoints during training to monitor progress
+    trigger_phrases: ["track training progress", "evaluate checkpoints", "training curve"]
+    rules:
+      - priority: HIGH
+        text: "Use quick benchmarks (HellaSwag, GSM8K) for frequent evaluation"
+      - priority: HIGH
+        text: "Avoid MMLU for frequent eval — too slow (2 hours)"
+      - priority: NORMAL
+        text: "Use --num_fewshot 0 for speed during training monitoring"
+    examples:
+      - label: "checkpoint evaluation script"
+        language: bash
+        code: |
+          lm_eval --model hf \
+            --model_args pretrained=$CHECKPOINT_DIR/checkpoint-$STEP \
+            --tasks gsm8k,hellaswag \
+            --num_fewshot 0 \
+            --batch_size 16 \
+            --output_path results/step-$STEP.json
+
+  vllm_evaluation:
+    description: Use vLLM backend for 5-10x faster evaluation
+    trigger_phrases: ["faster evaluation", "vllm evaluation", "speed up benchmark"]
+    rules:
+      - priority: HIGH
+        text: "vLLM is 5-10x faster than standard HuggingFace for evaluation"
+      - priority: HIGH
+        text: "Use --batch_size auto with vLLM"
+      - priority: NORMAL
+        text: "Tensor parallelism for multi-GPU: tensor_parallel_size=2"
+    examples:
+      - label: "vllm evaluation"
+        language: bash
+        code: |
+          lm_eval --model vllm \
+            --model_args pretrained=meta-llama/Llama-2-7b-hf,tensor_parallel_size=2,dtype=auto,gpu_memory_utilization=0.8 \
+            --tasks mmlu \
+            --batch_size auto
+
+guardrails:
+  - text: "Use exact task names — mmlu, not mmlu_direct or mmlu_fewshot"
+    scope: ALWAYS
+  - text: "Standard few-shot is 5 for reproducibility against published results"
+    scope: ALWAYS
+  - text: "7B bf16 needs ~16GB VRAM; 8-bit needs ~8GB"
+    scope: ALWAYS
+
+related:
+  - name: weights-and-biases
+    relationship: composes_with
+    description: "Log benchmark results to W&B for tracking"

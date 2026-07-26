@@ -1,0 +1,142 @@
+skill:
+  name: repository-deep-research
+  version: 1.0.0
+  summary: "Deep research of GitHub repos — clone and read source, not just READMEs; dual non-technical + technical reports"
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [deep research, repo breakdown, source analysis, codebase analysis, technical dive, architecture truth]
+  intents: [deep_repo_analysis, technical_breakdown, codebase_audit, theory_grounded_analysis]
+  patterns:
+    - "(deep research|full breakdown|technical dive) .*(repo|repository|github)"
+    - "(read the code|not just docs|dont be lazy)"
+    - "(analyze|examine|audit) .*(codebase|monorepo|repo)"
+    - "github\\.com/.+/.+ .*(deep|analysis|breakdown)"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+    - name: write_file
+      required: true
+    - name: read_file
+      required: true
+    - name: web_search
+      required: false
+  binaries: [git, curl, python3]
+
+provides:
+  capabilities: [repo_deep_dive, source_analysis, architecture_mapping, dual_report, theory_grounded_analysis]
+  output_types: [.md]
+
+actions:
+
+  orient:
+    description: Cheap pass — GitHub API metadata + README for orientation only
+    trigger_phrases: ["orient to repo", "get repo overview", "repo metadata"]
+    rules:
+      - priority: CRITICAL
+        text: "README/ARCHITECTURE.md is orientation only — do not stop here for deep dives"
+      - priority: HIGH
+        text: "GitHub API: description, stars, dates, languages, license, topics, contributors, recent commits"
+      - priority: HIGH
+        text: "Tree inventory: top-level dirs, module roots, file counts"
+      - priority: NORMAL
+        text: "curl pipe to python3 blocked by security scanners in some envs — use two-step: curl -o /tmp/file.json && python3 -c '...' < /tmp/file.json"
+    data:
+      - key: github_api_url
+        string_value: "https://api.github.com/repos/{owner}/{repo}"
+
+  clone_and_map:
+    description: Clone the repo and inventory modules
+    trigger_phrases: ["clone repo", "map codebase", "inventory modules"]
+    rules:
+      - priority: HIGH
+        text: "git clone --depth 1 for efficiency unless full history needed"
+      - priority: HIGH
+        text: "Inventory modules, Makefile install targets, frozen specs, skills/docs trees"
+      - priority: NORMAL
+        text: "For large repos (50+ modules): prioritize by wc -l on candidate files to find heaviest, read entry points first"
+
+  source_first_deep_dive:
+    description: Read source code for load-bearing subsystems
+    trigger_phrases: ["read source", "deep dive source", "source-first analysis"]
+    rules:
+      - priority: CRITICAL
+        text: "For deep dives or named subsystems, clone the repo and read source: entrypoints, control loops, types, store paths, failure modes"
+      - priority: CRITICAL
+        text: "If user names specific modules (Neo/Cortex/etc), those source trees are mandatory — read them"
+      - priority: HIGH
+        text: "Read: cmd/main entry (boot wiring), core package facade/loop (control flow), store/journal (persistence invariants), failure/incomplete types (honesty model), tests (contract enforcement)"
+      - priority: HIGH
+        text: "Language-adaptive symbol search: Go→func/WriteBatch, Python→class/def, TypeScript→class/interface, Rust→impl/fn/trait"
+      - priority: HIGH
+        text: "Prefer implementation comments and tests over polished docs when they disagree"
+      - priority: NORMAL
+        text: "For 3K+ line files: read first 100-200 lines, then search for class/function definitions, read specific sections"
+    data:
+      - key: language_symbols
+        map_value:
+          entries:
+            go: { string_value: "func (a *Agent) Chat, WriteBatch, Verdict, type ... interface" }
+            python: { string_value: "class AIAgent, def run_conversation, registry.register(), @dataclass" }
+            typescript: { string_value: "class Agent {, async run(, interface Tool, export function" }
+            rust: { string_value: "impl Agent, fn run(, trait Tool, pub fn dispatch" }
+
+  cross_check_docs_vs_code:
+    description: Call out divergences between docs and actual implementation
+    trigger_phrases: ["cross-check docs", "docs vs code", "verify claims"]
+    rules:
+      - priority: HIGH
+        text: "Call out divergences: design says X but implementation does Y; frozen spec still binds but feature retired; etc."
+      - priority: NORMAL
+        text: "Frozen design (.kvx / design docs) can be aspirational or superseded — verify enablement flags and live call sites"
+
+  deliver_dual_report:
+    description: Produce both non-technical and technical reports
+    trigger_phrases: ["write report", "deliver findings", "dual report"]
+    rules:
+      - priority: HIGH
+        text: "Non-technical: product story, layers, capabilities, who-for, status"
+      - priority: HIGH
+        text: "Technical: facts, architecture, module maturity, deep dives, security, strengths, risks, how to evaluate"
+      - priority: HIGH
+        text: "Dual deliverable is default when user asks for full breakdown + report"
+      - priority: NORMAL
+        text: "Never fabricate tool output — if clone/API fails, say so; never invent stars, LOC, or file contents"
+
+  theory_grounded_analysis:
+    description: Analyze codebase against academic papers or specs
+    trigger_phrases: ["analyze against paper", "theory-grounded analysis", "code vs paper"]
+    rules:
+      - priority: CRITICAL
+        text: "Read the theory FIRST completely — extract full text including omitted middles. Do not reason about codebase until framework is fully loaded"
+      - priority: CRITICAL
+        text: "Build correspondence table: theory concept → code artifact. This is the primary deliverable"
+      - priority: HIGH
+        text: "Look for self-referential patterns — systems that embody their own theory are highest-signal findings"
+      - priority: HIGH
+        text: "Evaluate, don't just map — call out where code validates, extends, or contradicts the theory"
+      - priority: HIGH
+        text: "Name the tensions between contradictory theoretical claims — show where code resolves or amplifies them"
+      - priority: NORMAL
+        text: "Named modules must be read as source, not docs — read agent.go, premise.go, prediction.go etc."
+
+guardrails:
+  - text: "Reading READMEs and ARCHITECTURE.md is orientation only — source-first is mandatory for deep dives"
+    scope: ALWAYS
+  - text: "Never claim dependency/integration relationships without verifying in source (go.mod, package.json, imports)"
+    scope: ALWAYS
+  - text: "Never fabricate tool output — if clone/API fails, say so"
+    scope: ALWAYS
+  - text: "Don't conflate correction with explanation — fix factual errors silently and move on"
+    scope: ALWAYS
+  - text: "Pass file paths not content to synthesis agents — inline report content truncates and bloats context"
+    scope: ALWAYS
+
+related:
+  - name: oss-developer-traction
+    relationship: alternative_to
+    description: "Pre-launch GitHub/dev GTM and star-worthiness (packaging/distribution, not source-first)"

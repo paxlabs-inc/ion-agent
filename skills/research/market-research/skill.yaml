@@ -1,0 +1,104 @@
+skill:
+  name: market-research
+  version: 1.0.0
+  summary: "Compile structured market/competitive intelligence from web sources into actionable reference documents"
+  author: community
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [market research, competitive intelligence, vendor comparison, landscape scan, pricing research, industry mapping]
+  intents: [research_market, compare_vendors, compile_intelligence, map_industry]
+  patterns:
+    - "(research|analyze|map) .*(market|industry|landscape|competitive)"
+    - "(find|compare|list) .*(vendors|services|providers|options)"
+    - "(pricing|cost|fee) .*(research|comparison|analysis)"
+    - "what are the options for"
+    - "competitive intelligence"
+
+requires:
+  tools:
+    - name: web_search
+      required: true
+    - name: web_extract
+      required: false
+    - name: write_file
+      required: true
+
+provides:
+  capabilities: [market_intelligence, vendor_comparison, pricing_research, landscape_analysis]
+  output_types: [.md]
+
+actions:
+
+  scope_research:
+    description: Identify key dimensions and filters for the research
+    trigger_phrases: ["scope research", "define research dimensions", "plan market research"]
+    rules:
+      - priority: HIGH
+        text: "Identify key dimensions: pricing, features, coverage, payment terms, integrations, etc."
+      - priority: HIGH
+        text: "Note filters: geography, tier, company size, industry vertical"
+      - priority: NORMAL
+        text: "Confirm scope with user before executing multi-query search"
+
+  multi_query_search:
+    description: Execute parallel searches varying the angle for breadth
+    trigger_phrases: ["search market", "gather market data", "find vendors"]
+    rules:
+      - priority: CRITICAL
+        text: "Execute 3-6 independent searches in parallel, varying the angle"
+      - priority: HIGH
+        text: "Search angles: direct name, specific feature, comparison/ranking, cost/fee breakdown"
+      - priority: HIGH
+        text: "Read snippets carefully for cross-references and specific data points"
+      - priority: HIGH
+        text: "Use web_extract on promising URLs for full-page content"
+      - priority: NORMAL
+        text: "Don't retry web_extract more than twice on same domain — likely rate-limited; use alternative queries"
+    data:
+      - key: search_angles
+        list_value:
+          items:
+            - { string_value: "Direct name searches" }
+            - { string_value: "Specific feature searches" }
+            - { string_value: "Comparison/ranking searches" }
+            - { string_value: "Cost/fee breakdown searches" }
+
+  cross_reference_validate:
+    description: Validate data points across multiple independent sources
+    trigger_phrases: ["validate findings", "cross-reference data"]
+    rules:
+      - priority: HIGH
+        text: "Require same data point in 2+ independent sources before treating as confirmed"
+      - priority: HIGH
+        text: "Flag single-source claims as 'reported' or 'estimated'"
+      - priority: NORMAL
+        text: "Note when information is clearly outdated — check dates in snippets"
+
+  compile_deliverable:
+    description: Structure findings into a reference document
+    trigger_phrases: ["compile report", "create market report", "write up findings"]
+    rules:
+      - priority: HIGH
+        text: "Structure: summary table(s) for quick scanning, tiered/grouped organization, explicit confidence markers"
+      - priority: HIGH
+        text: "Include actionable takeaway section at the end"
+      - priority: HIGH
+        text: "Save to /tmp/ with descriptive filename"
+      - priority: NORMAL
+        text: "User wants a document they can reference/share, not just a chat answer"
+      - priority: NORMAL
+        text: "Be honest about gaps — don't fill unknowns with plausible guesses"
+
+guardrails:
+  - text: "Never fabricate pricing or contact details you didn't find"
+    scope: ALWAYS
+  - text: "Don't stop at first search — surface breadth matters for market research"
+    scope: ALWAYS
+  - text: "Negative findings ('X does NOT charge fees') are often the most useful data points — include them"
+    scope: ALWAYS
+  - text: "When web_extract fails, compile from snippets — the research doesn't stop"
+    scope: ALWAYS
+
+related: []

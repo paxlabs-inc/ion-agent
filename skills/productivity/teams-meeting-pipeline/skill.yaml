@@ -1,0 +1,158 @@
+skill:
+  name: teams-meeting-pipeline
+  version: 1.1.0
+  summary: Operate the Teams meeting summary pipeline — summarize, inspect, replay, manage Graph subscriptions
+  author: Ion Agent + Teknium
+  license: MIT
+  platforms: [linux, macos, windows]
+
+triggers:
+  keywords: [teams, teams meeting, meeting summary, meeting transcript, teams pipeline, microsoft graph, graph subscription, teams webhook, action items]
+  intents: [teams_summarize, teams_pipeline_status, teams_replay_job, teams_manage_subscriptions, teams_validate_setup]
+  patterns:
+    - "(summarize|summary|transcript|notes|action items) .*(teams|meeting)"
+    - "(teams|meeting) .*(summary|transcript|pipeline|status)"
+    - "(replay|re-run|rerun) .*(job|meeting|summary)"
+    - "(graph|webhook) .*(subscription|subscribe|renew)"
+    - "pipeline .*(status|validate|list|show)"
+  anti_patterns:
+    - "zoom meeting"
+    - "google meet"
+
+requires:
+  env_all: [MSGRAPH_TENANT_ID, MSGRAPH_CLIENT_ID, MSGRAPH_CLIENT_SECRET]
+  tools:
+    - name: terminal
+      required: true
+  binaries: [ion]
+
+provides:
+  capabilities: [teams_meeting_summary, teams_pipeline_management, graph_subscription_management, teams_transcript_extraction]
+  output_types: [.json]
+
+actions:
+
+  validate_setup:
+    description: Validate Microsoft Graph and pipeline configuration
+    trigger_phrases: ["validate setup", "check teams config", "is teams pipeline working", "test graph setup"]
+    rules:
+      - priority: CRITICAL
+        text: "Run validate, token-health, then subscriptions — if all three pass, request a test meeting"
+      - priority: HIGH
+        text: "If env vars missing, direct user to Azure app registration guide at /docs/guides/microsoft-graph-app-registration"
+    data:
+      - key: validation_commands
+        list_value:
+          items:
+            - { string_value: "ion teams-pipeline validate" }
+            - { string_value: "ion teams-pipeline token-health" }
+            - { string_value: "ion teams-pipeline subscriptions" }
+
+  list_jobs:
+    description: List recent meeting jobs in the pipeline
+    trigger_phrases: ["list meetings", "recent meetings", "pipeline status", "show jobs", "meeting history"]
+    rules:
+      - priority: HIGH
+        text: "ion teams-pipeline list — add --status failed to filter failures"
+      - priority: NORMAL
+        text: "For 'why no summary': start with list --status failed, then show <job-id>"
+    data:
+      - key: command_pattern
+        string_value: "ion teams-pipeline list [--status failed|completed|pending]"
+    examples:
+      - label: "list recent jobs"
+        language: bash
+        code: "ion teams-pipeline list"
+      - label: "list only failed jobs"
+        language: bash
+        code: "ion teams-pipeline list --status failed"
+
+  show_job:
+    description: Show full detail of a specific meeting job
+    trigger_phrases: ["show job", "job details", "meeting details", "inspect job"]
+    rules:
+      - priority: HIGH
+        text: "ion teams-pipeline show <job-id> — shows full job detail including errors"
+    data:
+      - key: command_pattern
+        string_value: "ion teams-pipeline show JOB_ID"
+
+  replay_job:
+    description: Re-run a stored meeting job for fresh summary
+    trigger_phrases: ["replay job", "re-run summary", "reprocess meeting", "try again"]
+    rules:
+      - priority: HIGH
+        text: "ion teams-pipeline run <job-id> — re-summarizes and re-delivers"
+      - priority: HIGH
+        text: "If replay fails: show <job-id> to inspect error, fetch --meeting-id to dry-run artifact resolution"
+    data:
+      - key: command_pattern
+        string_value: "ion teams-pipeline run JOB_ID"
+
+  fetch_dry_run:
+    description: "Dry-run: resolve meeting and transcript without persisting"
+    trigger_phrases: ["fetch meeting", "dry run", "check transcript", "resolve meeting"]
+    rules:
+      - priority: HIGH
+        text: "ion teams-pipeline fetch --meeting-id <id> or --join-web-url \"<url>\""
+      - priority: NORMAL
+        text: "Transcript may not be available immediately — Teams takes 2-5 min after meeting ends"
+    data:
+      - key: command_patterns
+        map_value:
+          entries:
+            by_meeting_id: { string_value: "ion teams-pipeline fetch --meeting-id MEETING_ID" }
+            by_join_url: { string_value: "ion teams-pipeline fetch --join-web-url \"URL\"" }
+
+  manage_subscriptions:
+    description: Create, renew, delete, or inspect Graph webhook subscriptions
+    trigger_phrases: ["manage subscription", "create webhook", "renew subscription", "delete subscription", "graph subscriptions"]
+    rules:
+      - priority: CRITICAL
+        text: "Graph subscriptions expire in 72 hours and will NOT auto-renew — must schedule maintain-subscriptions"
+      - priority: CRITICAL
+        text: "Without automated renewal, meeting notifications silently stop arriving after 3 days"
+      - priority: HIGH
+        text: "12-hour renewal interval is safe (6x headroom against 72h limit)"
+      - priority: HIGH
+        text: "Set up automated renewal via ion cron add, systemd timer, or crontab"
+    data:
+      - key: commands
+        map_value:
+          entries:
+            list: { string_value: "ion teams-pipeline subscriptions" }
+            create: { string_value: "ion teams-pipeline subscribe --resource RESOURCE --notification-url URL --client-state STATE" }
+            renew: { string_value: "ion teams-pipeline renew-subscription SUB_ID --expiration ISO_DATE" }
+            delete: { string_value: "ion teams-pipeline delete-subscription SUB_ID" }
+            maintain: { string_value: "ion teams-pipeline maintain-subscriptions [--dry-run]" }
+      - key: subscription_expiry_hours
+        int_value: 72
+      - key: recommended_renewal_hours
+        int_value: 12
+
+  troubleshoot:
+    description: Troubleshoot pipeline issues — missing summaries, ingestion failures
+    trigger_phrases: ["meeting summary not arrived", "no new meetings", "pipeline broken", "troubleshoot teams", "why no summary"]
+    rules:
+      - priority: CRITICAL
+        text: "Most common cause: expired Graph subscriptions — check subscriptions first"
+      - priority: HIGH
+        text: "Decision tree: list --status failed → show <job-id> → if no job exists → check subscriptions"
+      - priority: HIGH
+        text: "If validate+token-health+subscriptions all pass but no ingestion → check webhook URL and delivery mode config"
+      - priority: NORMAL
+        text: "Transcript not available yet? Wait 2-5 min after meeting ends and retry"
+      - priority: NORMAL
+        text: "401/403 on Graph calls despite valid token → admin consent not re-granted after permission changes"
+
+guardrails:
+  - text: "Graph subscriptions expire in 72h — always set up automated renewal"
+    scope: ALWAYS
+  - text: "Verify env vars (MSGRAPH_TENANT_ID, MSGRAPH_CLIENT_ID, MSGRAPH_CLIENT_SECRET) before first use"
+    scope: ALWAYS
+  - text: "Transcript availability has 2-5 min delay after meeting ends — don't fail immediately on empty"
+    scope: READ_OPS
+  - text: "Point users to full docs: /docs/guides/operate-teams-meeting-pipeline for runbook"
+    scope: ALWAYS
+
+related: []

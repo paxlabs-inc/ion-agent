@@ -1,0 +1,109 @@
+skill:
+  name: findmy
+  version: 1.0.0
+  summary: Track Apple devices/AirTags via FindMy.app on macOS
+  author: Ion Agent
+  license: MIT
+  platforms: [macos]
+
+triggers:
+  keywords: [find my, findmy, airtag, device tracking, location, apple devices]
+  intents: [find_device, track_airtag, locate_device]
+  patterns:
+    - "(where is|find|locate) .*(device|phone|ipad|mac|airpod|airtag|keys|bag)"
+    - "(track|tracking) .*(device|airtag|location)"
+    - "find my"
+
+requires:
+  tools:
+    - name: terminal
+      required: true
+  optional_env: [OBSIDIAN_VAULT_PATH]
+
+provides:
+  capabilities: [device_location, airtag_tracking]
+  output_types: [.png]
+
+actions:
+
+  find_device:
+    description: Locate an Apple device or AirTag via FindMy.app
+    trigger_phrases: ["where is my phone", "find my ipad", "locate my airpods", "where are my keys"]
+    rules:
+      - priority: CRITICAL
+        text: "FindMy has no CLI or API — UI automation via AppleScript/screenshots is the only option"
+      - priority: CRITICAL
+        text: "Keep FindMy app in foreground while tracking AirTags (location updates stop when minimized)"
+      - priority: HIGH
+        text: "Use vision_analyze to interpret screenshots — don't attempt to parse raw pixels"
+      - priority: HIGH
+        text: "Screen Recording permission required for screenshots"
+      - priority: NORMAL
+        text: "Install peekaboo for enhanced UI automation: brew install steipete/tap/peekaboo"
+    data:
+      - key: method_basic
+        list_value:
+          items:
+            - string_value: "osascript -e 'tell application \"FindMy\" to activate'"
+            - string_value: "sleep 3"
+            - string_value: "screencapture -w -o /tmp/findmy.png"
+      - key: method_peekaboo
+        list_value:
+          items:
+            - string_value: "osascript -e 'tell application \"FindMy\" to activate'"
+            - string_value: "sleep 3"
+            - string_value: "peekaboo see --app \"FindMy\" --annotate --path /tmp/findmy-ui.png"
+            - string_value: "peekaboo click --on B3 --app FindMy"
+    examples:
+      - label: "open FindMy and capture screenshot"
+        language: bash
+        code: |
+          osascript -e 'tell application "FindMy" to activate'
+          sleep 3
+          screencapture -w -o /tmp/findmy.png
+
+  switch_tabs:
+    description: Switch between Devices and Items tabs in FindMy
+    trigger_phrases: ["show devices", "show airtags", "switch to items tab"]
+    rules:
+      - priority: HIGH
+        text: "Use AppleScript to click toolbar buttons for tab switching"
+    examples:
+      - label: "switch to Items tab"
+        language: bash
+        code: |
+          osascript -e '
+          tell application "System Events"
+              tell process "FindMy"
+                  click button "Items" of toolbar 1 of window 1
+              end tell
+          end tell'
+
+  track_airtag:
+    description: Monitor an AirTag location over time
+    trigger_phrases: ["track my airtag", "follow airtag", "monitor airtag location"]
+    rules:
+      - priority: CRITICAL
+        text: "AirTag locations only refresh while FindMy page is actively in view"
+      - priority: HIGH
+        text: "Set up cronjob for periodic screenshot capture and vision analysis"
+      - priority: HIGH
+        text: "Only track devices/items that belong to the user — honor privacy"
+    examples:
+      - label: "periodic airtag capture loop"
+        language: bash
+        code: |
+          while true; do
+              screencapture -w -o /tmp/findmy-$(date +%H%M%S).png
+              sleep 300
+          done
+
+guardrails:
+  - text: "Only track devices and items that belong to the user — honor privacy"
+    scope: ALWAYS
+  - text: "Never close or switch away from FindMy while actively tracking AirTags"
+    scope: ALWAYS
+  - text: "Use vision_analyze to interpret screenshots, not raw pixel parsing"
+    scope: ALWAYS
+
+related: []

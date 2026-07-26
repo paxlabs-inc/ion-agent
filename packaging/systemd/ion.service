@@ -1,0 +1,27 @@
+[Unit]
+Description=Ion agent computer
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=ion-agent
+Group=ion-agent
+WorkingDirectory=/var/lib/ion-agent
+StateDirectory=ion-agent
+StateDirectoryMode=0700
+EnvironmentFile=-/etc/ion-agent/environment
+Environment=PATH=/usr/local/bin:/usr/bin
+ExecStart=/usr/bin/env ion dashboard --data-dir=/var/lib/ion-agent --listen=127.0.0.1:4174
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
