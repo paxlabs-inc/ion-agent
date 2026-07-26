@@ -22,7 +22,7 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.16",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "ink-testing-library": "^4.0.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
