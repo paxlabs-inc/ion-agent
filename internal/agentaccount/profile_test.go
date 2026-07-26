@@ -316,7 +316,9 @@ func key(t *testing.T) *ecdsa.PrivateKey {
 }
 
 func publicBytes(privateKey *ecdsa.PrivateKey) []byte {
-	return elliptic.Marshal(
-		elliptic.P256(), privateKey.PublicKey.X, privateKey.PublicKey.Y,
-	)
+	publicKey, err := privateKey.PublicKey.ECDH()
+	if err != nil {
+		panic(err)
+	}
+	return publicKey.Bytes()
 }

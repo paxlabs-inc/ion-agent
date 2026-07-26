@@ -375,7 +375,7 @@ func (adapter *localResourceAdapter) Apply(ctx context.Context, plan ResourcePla
 	if err := os.WriteFile(filepath.Join(root, "desired.json"), desiredRaw, 0o600); err != nil {
 		return ResourceReceipt{}, err
 	}
-	endpoint := root
+	var endpoint string
 	switch plan.Desired.Kind {
 	case ResourceDatabase, ResourceAuth, ResourceEmail, ResourceQueue, ResourceSchedule, ResourceAnalytics:
 		databasePath := filepath.Join(root, "resource.sqlite")

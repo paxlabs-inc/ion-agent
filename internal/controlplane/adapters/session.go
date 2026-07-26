@@ -50,6 +50,11 @@ type branchMessageStore interface {
 	) (session.Message, error)
 }
 
+type branchSessionStore interface {
+	CreateSession(context.Context, *uuid.UUID) (session.Session, error)
+	ListMessages(context.Context, uuid.UUID) ([]session.Message, error)
+}
+
 type atomicBranchStore interface {
 	BranchSession(
 		context.Context,
@@ -313,7 +318,7 @@ func RegisterSessionHandlers(
 
 func branchSession(
 	ctx context.Context,
-	store SessionStore,
+	store branchSessionStore,
 	parentID uuid.UUID,
 	payload sessionPayload,
 ) (session.Session, error) {

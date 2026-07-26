@@ -116,7 +116,7 @@ type EditorCustomization struct {
 // DocumentEngineStatus represents the engine's view of a document.
 type DocumentEngineStatus struct {
 	Key      string     `json:"key"`
-	Url      string     `json:"url,omitempty"`
+	URL      string     `json:"url,omitempty"`
 	Editing  bool       `json:"editing"`
 	LastSave *time.Time `json:"last_save,omitempty"`
 }

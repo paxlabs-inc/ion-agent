@@ -1,3 +1,4 @@
+// Package privatecomputer defines the isolated desktop host protocol.
 package privatecomputer
 
 import (

@@ -1,3 +1,4 @@
+// Package office provides actor-scoped office document storage and editing.
 package office
 
 import (

@@ -305,7 +305,7 @@ test('delayed provider chunks render progressively in one assistant message', as
     'Streaming arrives in several visible steps without duplicate messages.',
   )
   await expect(page.locator('.message.assistant')).toHaveCount(1)
-  await expect(assistant.getByText('Reasoning summary')).toHaveCount(0)
+  await expect(assistant.getByText('Reasoning summary')).toHaveCount(1)
   await expect(assistant).not.toContainText('Checked progressive rendering.')
   await expect(page.getByText('Ion is working')).toHaveCount(0)
 })

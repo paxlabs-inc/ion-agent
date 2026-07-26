@@ -794,7 +794,6 @@ func (loop *Loop) runTurn(
 					}
 					continue
 				}
-				completionRepair = nil
 			}
 			if !planFormed &&
 				requiresEpistemicCommitment(userContent) {

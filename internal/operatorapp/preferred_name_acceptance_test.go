@@ -3,6 +3,7 @@ package operatorapp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -148,7 +149,18 @@ func TestPreferredNameFirstContactRestartContextAndReasoningEnforcement(
 	}
 	for _, event := range replay.Events {
 		if event.Type == controlplane.EventReasoningSummary {
-			t.Fatalf("raw provider reasoning event escaped: %+v", event)
+			var summary struct {
+				Content string `json:"content"`
+				Source  string `json:"source"`
+			}
+			if err := json.Unmarshal(event.Payload, &summary); err != nil {
+				t.Fatal(err)
+			}
+			if summary.Source != "safe_summary" ||
+				summary.Content != "Reviewing the request and available context." ||
+				bytes.Contains(event.Payload, []byte("simply saying hello")) {
+				t.Fatalf("unsafe provider reasoning event escaped: %+v", event)
+			}
 		}
 	}
 	database, err := os.ReadFile(filepath.Join(dataDirectory, "sessions.db"))

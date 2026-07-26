@@ -164,7 +164,9 @@ func (s *Store) CreateDocumentWithVersion(
 	if err != nil {
 		return err
 	}
-	defer transaction.Rollback()
+	defer func() {
+		_ = transaction.Rollback()
+	}()
 	if _, err := transaction.ExecContext(ctx,
 		`INSERT INTO documents (id, actor_id, title, kind, extension, current_version_id, starred, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -307,7 +309,9 @@ func (s *Store) CommitVersion(
 	if err != nil {
 		return err
 	}
-	defer transaction.Rollback()
+	defer func() {
+		_ = transaction.Rollback()
+	}()
 	if _, err := transaction.ExecContext(ctx,
 		`INSERT INTO document_versions (id, document_id, actor_id, sequence, extension, mime_type, sha256, size_bytes, origin, engine_doc_key, created_at, created_by)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

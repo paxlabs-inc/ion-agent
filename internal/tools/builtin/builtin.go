@@ -1097,7 +1097,7 @@ func webSearch(config searchProviderConfig, client *http.Client) tools.Registrat
 				}
 				if tavilyErr != nil {
 					return nil, fmt.Errorf(
-						"Tavily search unavailable: %v; SearXNG fallback unavailable: %w",
+						"tavily search unavailable: %v; SearXNG fallback unavailable: %w",
 						tavilyErr, fallbackErr,
 					)
 				}

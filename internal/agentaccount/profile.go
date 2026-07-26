@@ -1,6 +1,8 @@
+// Package agentaccount implements scoped agent registration, delegation, and recovery.
 package agentaccount
 
 import (
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -10,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/url"
 	"sort"
 	"strings"
@@ -459,9 +462,11 @@ func SignRequest(privateKey *ecdsa.PrivateKey, proof RequestProof) (string, erro
 }
 
 func EncodePublicKey(publicKey *ecdsa.PublicKey) string {
-	return base64.RawURLEncoding.EncodeToString(
-		elliptic.Marshal(elliptic.P256(), publicKey.X, publicKey.Y),
-	)
+	ecdhKey, err := publicKey.ECDH()
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(ecdhKey.Bytes())
 }
 
 func decodePublicKey(encoded string) ([]byte, error) {
@@ -476,11 +481,17 @@ func decodePublicKey(encoded string) ([]byte, error) {
 }
 
 func parsePublicKey(encoded []byte) (*ecdsa.PublicKey, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), encoded)
-	if x == nil || y == nil {
+	if len(encoded) != 65 || encoded[0] != 4 {
 		return nil, errors.New("P-256 public key is invalid")
 	}
-	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, nil
+	if _, err := ecdh.P256().NewPublicKey(encoded); err != nil {
+		return nil, errors.New("P-256 public key is invalid")
+	}
+	return &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     new(big.Int).SetBytes(encoded[1:33]),
+		Y:     new(big.Int).SetBytes(encoded[33:]),
+	}, nil
 }
 
 func verifySignature(publicKey []byte, digest []byte, encoded string) bool {

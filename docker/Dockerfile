@@ -24,6 +24,7 @@ COPY ui/web/package.json ./web/
 COPY ui/tui/package.json ./tui/
 RUN npm ci --ignore-scripts
 
+COPY assets/ /src/assets/
 COPY ui/ ./
 RUN npm run build && npm run check:budgets
 

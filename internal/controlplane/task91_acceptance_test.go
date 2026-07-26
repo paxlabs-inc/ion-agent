@@ -355,7 +355,9 @@ func TestTask91HeadlessEncryptedTurnApprovalReconnectAndExactState(t *testing.T)
 	if len(durable.Messages) != 2 ||
 		durable.Messages[0].Role != session.RoleUser ||
 		durable.Messages[1].Role != session.RoleAssistant ||
-		durable.Messages[1].Content != "The approved operation completed." {
+		durable.Messages[1].Content !=
+			"I need approval before applying the consequential operation.\n\n"+
+				"The approved operation completed." {
 		t.Fatalf("durable transcript = %+v", durable.Messages)
 	}
 	cachedApproval := respond

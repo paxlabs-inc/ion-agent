@@ -179,14 +179,13 @@ func TestExecutionHierarchyAndBoundedCorrelation(t *testing.T) {
 func TestReceiptReferencesExistingPolicyAndEvidenceTruth(t *testing.T) {
 	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
 	envelope := testEnvelope(now, testScope(ModePersonal))
-	fingerprint, err := envelope.Fingerprint()
-	if err != nil {
+	if _, err := envelope.Fingerprint(); err != nil {
 		t.Fatal(err)
 	}
 	correlation := testCorrelation()
 	correlation.PolicyDecisionID = envelope.PolicyDecisionID
 	envelope.Correlation = correlation
-	fingerprint, err = envelope.Fingerprint()
+	fingerprint, err := envelope.Fingerprint()
 	if err != nil {
 		t.Fatal(err)
 	}

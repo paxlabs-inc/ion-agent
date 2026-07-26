@@ -1,3 +1,4 @@
+// Package media provides actor-scoped media generation jobs and assets.
 package media
 
 import (
