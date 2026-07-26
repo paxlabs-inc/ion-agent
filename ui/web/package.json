@@ -35,7 +35,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "axe-core": "^4.10.3",
     "jsdom": "^27.0.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vite": "^7.1.9",
     "vitest": "^3.2.4"
   }
