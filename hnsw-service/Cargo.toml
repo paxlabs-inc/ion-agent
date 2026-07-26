@@ -13,7 +13,7 @@ cxx = "=1.0.122"
 usearch = "=2.12.0"
 
 [build-dependencies]
-cxx-build = "=1.0.122"
+cxx-build = "=1.0.198"
 
 [profile.release]
 lto = "thin"
