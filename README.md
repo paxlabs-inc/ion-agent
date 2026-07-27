@@ -19,6 +19,8 @@ operator-controlled access to tools, projects, browsers, and specialist agents.
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![OpenSSF Best Practices](https://img.shields.io/badge/OpenSSF-best%20practices-informational.svg)](https://www.bestpractices.dev/)
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/2MbBhn?referralCode=g2f45Y&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 [Product](https://ion.matrixmcl.com) ·
 [Documentation](docs/) ·
 [Architecture](ARCHITECTURE.md) ·
