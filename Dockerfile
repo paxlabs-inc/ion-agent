@@ -21,13 +21,11 @@ ARG BUILD_TIME=unknown
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN go mod download
 COPY . .
 COPY --from=web /src/ui/web/dist ./ui/web/dist
 COPY --from=web /src/ui/tui/dist ./ui/tui/dist
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 go build -trimpath \
+RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
       -o /out/ion ./cmd/ion \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
@@ -124,7 +122,6 @@ ENV ION_APPLIANCE_DATA_ROOT=/data \
     ION_OFFICE_PUBLIC_PATH=/office-engine/ \
     PORT=8080
 
-VOLUME ["/data"]
 EXPOSE 8080
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10m --retries=3 \
