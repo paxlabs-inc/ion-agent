@@ -1,11 +1,11 @@
 .git
-.ion
+.github
+.openai
 bin
-hnsw-service/target
+dist
 node_modules
-research
-temp
+test-results
 ui/node_modules
 ui/web/dist
-ui/web/playwright-report
-ui/web/test-results
+ui/tui/dist
+*.log

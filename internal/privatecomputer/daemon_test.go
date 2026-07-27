@@ -32,6 +32,14 @@ func TestBrowserContainmentFailsClosedForPersonalState(t *testing.T) {
 	if err := config.Validate(); err != nil {
 		t.Fatalf("sandboxed browser boundary: %v", err)
 	}
+	config.BrowserContainment = BrowserApplianceBoundary
+	if err := config.Validate(); err == nil {
+		t.Fatal("appliance browser boundary accepted a readable daemon auth key")
+	}
+	config.AuthKeyIsolated = true
+	if err := config.Validate(); err != nil {
+		t.Fatalf("isolated appliance browser boundary: %v", err)
+	}
 
 	clean := daemonTestConfig(t, ModeClean)
 	clean.BrowserContainment = BrowserCleanHostBoundary

@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 )
 
 // KEKSource stores the key-encryption key outside Ion configuration and
@@ -19,6 +21,54 @@ type KEKSource interface {
 	Load(context.Context) ([]byte, error)
 	Store(context.Context, []byte) error
 	Name() string
+}
+
+// DeploymentKEKSource loads a write-only deployment secret supplied by the
+// hosting platform. The encoded secret is consumed after the first successful
+// load so plaintext key material does not remain in configuration state.
+type DeploymentKEKSource struct {
+	mu  sync.Mutex
+	key []byte
+}
+
+// NewDeploymentKEKSource validates a base64-encoded 256-bit deployment KEK.
+func NewDeploymentKEKSource(encoded string) (*DeploymentKEKSource, error) {
+	encoded = strings.TrimSpace(encoded)
+	if encoded == "" {
+		return nil, fmt.Errorf("vault: deployment KEK is required")
+	}
+	key, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		key, err = base64.StdEncoding.DecodeString(encoded)
+	}
+	if err != nil || len(key) != KeySize {
+		zero(key)
+		return nil, fmt.Errorf("vault: deployment KEK must be a base64-encoded 256-bit key")
+	}
+	return &DeploymentKEKSource{key: key}, nil
+}
+
+func (source *DeploymentKEKSource) Name() string {
+	return "deployment-secret"
+}
+
+func (source *DeploymentKEKSource) Load(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if len(source.key) != KeySize {
+		return nil, ErrKeyNotFound
+	}
+	key := append([]byte(nil), source.key...)
+	zero(source.key)
+	source.key = nil
+	return key, nil
+}
+
+func (*DeploymentKEKSource) Store(context.Context, []byte) error {
+	return fmt.Errorf("vault: deployment KEK source is read-only")
 }
 
 // SecretToolSource accesses libsecret through the standard secret-tool CLI.

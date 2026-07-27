@@ -52,6 +52,7 @@ type BrowserContainment string
 const (
 	BrowserSandboxed         BrowserContainment = "sandboxed"
 	BrowserCleanHostBoundary BrowserContainment = "clean_host_boundary"
+	BrowserApplianceBoundary BrowserContainment = "appliance_boundary"
 	BrowserUnavailable       BrowserContainment = "unavailable"
 )
 
@@ -74,10 +75,15 @@ func (config DaemonConfig) Validate() error {
 		if config.Mode != ModeClean {
 			return ErrInvalidContract
 		}
+	case BrowserApplianceBoundary:
+		if config.Mode != ModePersonal {
+			return ErrInvalidContract
+		}
 	default:
 		return ErrInvalidContract
 	}
-	if config.BrowserContainment == BrowserCleanHostBoundary &&
+	if (config.BrowserContainment == BrowserCleanHostBoundary ||
+		config.BrowserContainment == BrowserApplianceBoundary) &&
 		!config.AuthKeyIsolated {
 		return ErrInvalidContract
 	}
@@ -337,7 +343,8 @@ func (daemon *DesktopDaemon) startDesktop(ctx context.Context) error {
 			"--user-data-dir=" + chromiumProfile,
 			"--window-size=" + strconv.Itoa(daemon.config.Width-80) + "," + strconv.Itoa(daemon.config.Height-100),
 		}
-		if daemon.config.BrowserContainment == BrowserCleanHostBoundary {
+		if daemon.config.BrowserContainment == BrowserCleanHostBoundary ||
+			daemon.config.BrowserContainment == BrowserApplianceBoundary {
 			arguments = append(arguments, "--no-sandbox")
 		}
 		arguments = append(arguments, daemon.config.StartURL)
@@ -767,12 +774,17 @@ func (daemon *DesktopDaemon) capabilities() []Capability {
 			continue
 		}
 		if kind == CapabilityBrowser &&
-			daemon.config.BrowserContainment == BrowserCleanHostBoundary {
+			(daemon.config.BrowserContainment == BrowserCleanHostBoundary ||
+				daemon.config.BrowserContainment == BrowserApplianceBoundary) {
+			reason := "Chromium process sandbox is disabled only for this fresh Clean workspace; containment relies on the disposable non-root, capability-dropped, read-only host boundary"
+			if daemon.config.BrowserContainment == BrowserApplianceBoundary {
+				reason = "Chromium process sandbox is disabled inside the single-service appliance; containment relies on its isolated non-root process identity and Railway container boundary"
+			}
 			result = append(result, Capability{
 				Kind:      kind,
 				Available: true,
 				Degraded:  true,
-				Reason:    "Chromium process sandbox is disabled only for this fresh Clean workspace; containment relies on the disposable non-root, capability-dropped, read-only host boundary",
+				Reason:    reason,
 			})
 			continue
 		}

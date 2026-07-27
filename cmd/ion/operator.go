@@ -225,6 +225,7 @@ func openOperatorRuntime(
 	}
 	return operatorapp.OpenRuntime(ctx, operatorapp.RuntimeConfig{
 		DataDirectory: dataDirectory, DevelopmentFileKEK: developmentFileKEK,
+		DeploymentKEK:    consumeEnvironmentSecret("ION_VAULT_KEK"),
 		AuthUsername:     os.Getenv("ION_AUTH_USERNAME"),
 		AuthPassword:     authPassword,
 		AuthPasswordHash: authPasswordHash,
@@ -243,6 +244,10 @@ func openOperatorRuntime(
 		OfficeEnabled:     officeEnabled,
 		OfficeInternalURL: os.Getenv("ION_OFFICE_INTERNAL_URL"),
 		OfficePublicPath:  os.Getenv("ION_OFFICE_PUBLIC_PATH"),
+		OfficePublicOrigin: firstNonEmpty(
+			os.Getenv("ION_OFFICE_PUBLIC_ORIGIN"),
+			os.Getenv("ION_WEB_ORIGIN"),
+		),
 		OfficeCallbackOrigin: firstNonEmpty(
 			os.Getenv("ION_OFFICE_CALLBACK_ORIGIN"),
 			os.Getenv("ION_WEB_ORIGIN"),

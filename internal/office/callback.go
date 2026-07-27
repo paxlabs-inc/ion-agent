@@ -27,6 +27,8 @@ type CallbackRequest struct {
 	Changes       json.RawMessage  `json:"changeshistory,omitempty"`
 	History       json.RawMessage  `json:"history,omitempty"`
 	FileType      string           `json:"filetype,omitempty"`
+	LastSave      string           `json:"lastsave,omitempty"`
+	NotModified   bool             `json:"notmodified,omitempty"`
 	ForceSaveType int              `json:"forcesavetype,omitempty"`
 	FormsDataURL  string           `json:"formsdataurl,omitempty"`
 	UserData      json.RawMessage  `json:"userdata,omitempty"`
@@ -251,6 +253,10 @@ func (s *Service) validateCallbackURL(rawURL string) error {
 			}
 		}
 	}
+	if s.publicOrigin != nil && sameOrigin(parsed, s.publicOrigin) &&
+		pathWithin(parsed.EscapedPath(), strings.TrimSuffix(s.publicPath, "/")) {
+		return nil
+	}
 	public, err := url.Parse(s.callbackOrigin)
 	if err == nil && sameOrigin(parsed, public) &&
 		pathWithin(parsed.EscapedPath(), strings.TrimSuffix(s.publicPath, "/")) {
@@ -260,6 +266,10 @@ func (s *Service) validateCallbackURL(rawURL string) error {
 }
 
 func (s *Service) downloadFromEngine(ctx context.Context, downloadURL string) ([]byte, error) {
+	internalURL, err := s.internalEngineDownloadURL(downloadURL)
+	if err != nil {
+		return nil, err
+	}
 	client := *s.httpClient
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) > 5 {
@@ -270,7 +280,7 @@ func (s *Service) downloadFromEngine(ctx context.Context, downloadURL string) ([
 		}
 		return nil
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", internalURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -292,6 +302,34 @@ func (s *Service) downloadFromEngine(ctx context.Context, downloadURL string) ([
 		return nil, ErrTooLarge
 	}
 	return content, nil
+}
+
+func (s *Service) internalEngineDownloadURL(downloadURL string) (string, error) {
+	parsed, err := url.Parse(downloadURL)
+	if err != nil {
+		return "", err
+	}
+	if s.publicOrigin == nil || !sameOrigin(parsed, s.publicOrigin) {
+		return downloadURL, nil
+	}
+	engine, ok := s.engine.(*OnlyOfficeEngine)
+	if !ok {
+		return "", fmt.Errorf("office: engine URL is unavailable")
+	}
+	internal, err := url.Parse(engine.internalURL)
+	if err != nil {
+		return "", err
+	}
+	publicPrefix := strings.TrimSuffix(s.publicPath, "/")
+	relative := strings.TrimPrefix(parsed.Path, publicPrefix)
+	parsed.Scheme = internal.Scheme
+	parsed.Host = internal.Host
+	parsed.Path = path.Join(strings.TrimSuffix(internal.Path, "/"), relative)
+	if strings.HasSuffix(relative, "/") && !strings.HasSuffix(parsed.Path, "/") {
+		parsed.Path += "/"
+	}
+	parsed.RawPath = ""
+	return parsed.String(), nil
 }
 
 func sameOrigin(left, right *url.URL) bool {

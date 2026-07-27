@@ -43,6 +43,7 @@ const (
 type RuntimeConfig struct {
 	DataDirectory                 string
 	DevelopmentFileKEK            bool
+	DeploymentKEK                 string
 	AuthUsername                  string
 	AuthPassword                  string
 	AuthPasswordHash              string
@@ -60,6 +61,7 @@ type RuntimeConfig struct {
 	OfficeInternalURL             string
 	OfficePublicPath              string
 	OfficeCallbackOrigin          string
+	OfficePublicOrigin            string
 	OfficeJWTSecret               string
 	OfficeMaxFileBytes            int64
 	OfficeMaxVersions             int
@@ -172,6 +174,9 @@ func OpenRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 		source, err = vault.NewFileKEKSource(
 			filepath.Join(config.DataDirectory, "development.kek"),
 		)
+	} else if strings.TrimSpace(config.DeploymentKEK) != "" {
+		source, err = vault.NewDeploymentKEKSource(config.DeploymentKEK)
+		config.DeploymentKEK = ""
 	} else {
 		source, err = vault.NewProductionKEKSource(
 			config.DataDirectory,
@@ -253,6 +258,7 @@ func OpenRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 		JWTSecret:      config.OfficeJWTSecret,
 		PublicPath:     config.OfficePublicPath,
 		CallbackOrigin: config.OfficeCallbackOrigin,
+		PublicOrigin:   config.OfficePublicOrigin,
 		MaxFileBytes:   config.OfficeMaxFileBytes,
 		MaxVersions:    config.OfficeMaxVersions,
 		Cipher:         vaultManager.Vault(),

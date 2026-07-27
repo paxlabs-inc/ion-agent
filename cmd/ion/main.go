@@ -90,6 +90,7 @@ func loadStartupDotEnvWith(
 		"ION_AUTH_USERNAME":                          {},
 		"ION_AUTH_PASSWORD":                          {},
 		"ION_AUTH_PASSWORD_HASH":                     {},
+		"ION_VAULT_KEK":                              {},
 		"ION_WEB_ORIGIN":                             {},
 		"TAVILY_API_KEY":                             {},
 		"ION_TAVILY_API_KEY":                         {},
@@ -99,6 +100,7 @@ func loadStartupDotEnvWith(
 		"ION_OFFICE_ENABLED":                         {},
 		"ION_OFFICE_INTERNAL_URL":                    {},
 		"ION_OFFICE_PUBLIC_PATH":                     {},
+		"ION_OFFICE_PUBLIC_ORIGIN":                   {},
 		"ION_OFFICE_CALLBACK_ORIGIN":                 {},
 		"ION_OFFICE_JWT_SECRET":                      {},
 		"ION_OFFICE_JWT_SECRET_FILE":                 {},
@@ -180,8 +182,14 @@ func initialize(ctx context.Context, arguments []string) error {
 
 	var source vault.KEKSource
 	var err error
+	deploymentKEK := consumeEnvironmentSecret("ION_VAULT_KEK")
 	if *developmentFileKEK {
+		if deploymentKEK != "" {
+			return fmt.Errorf("ion init: development and deployment KEK sources conflict")
+		}
 		source, err = vault.NewFileKEKSource(filepath.Join(*dataDirectory, "development.kek"))
+	} else if deploymentKEK != "" {
+		source, err = vault.NewDeploymentKEKSource(deploymentKEK)
 	} else {
 		source, err = vault.NewProductionKEKSource(
 			*dataDirectory,

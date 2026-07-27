@@ -148,9 +148,9 @@ workspace's access and retention policy.
 - Compose: `deploy/compose/docker-compose.office.yml`
 - Kubernetes: `deploy/kubernetes/office-deployment.yaml`
 - Helm: `deploy/helm/ion` with `-f deploy/helm/values-office.yaml`
-- Railway: create a second private ONLYOFFICE service, leave it without a
-  public domain, and seal the shared JWT in both services. Ion's callback origin
-  remains its public HTTPS origin.
+- Railway: the root appliance image runs ONLYOFFICE inside the single Ion
+  service. Its engine port remains internal and the appliance generates the
+  shared JWT.
 
 The current packaging reserves approximately 2 GiB and limits ONLYOFFICE to
 4 GiB. Size it for the selected edition and workload.

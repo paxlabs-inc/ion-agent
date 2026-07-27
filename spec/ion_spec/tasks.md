@@ -552,11 +552,11 @@
     - Expose Ion has control, You have control, and Control reconciling with precise expiry, needs-help, and unavailable consequences
     - Run real takeover, renewal, expiry, secret-entry, reconnect, control-plane restart, computer-host restart, and duplicate-safe resume journeys
     - _Requirements: 63.2-63.8, 65.2, 65.4-65.5_
-  - [ ] 16.5 Railway one-click packaging, onboarding, health, and rollback
-    - Build version-pinned Ion and ion-computer images plus a multi-service Railway template with only Ion public and no privileged runtime requirement
-    - Configure authenticated dual-stack private networking, generated or sealed secrets, write-only provider references, explicit ports, public origin policy, and optional HNSW
-    - Add Ion data and optional Personal workspace volumes with non-root ownership, start-time migrations, capacity checks, backups, export, restore, and redeploy-downtime guidance
-    - Add liveness, readiness, compatibility, migration, continuous monitoring, restart, rollback, single-writer, serverless-sleep, and unavailable reconciliation
+  - [ ] 16.5 Railway one-click single-service appliance, onboarding, health, and rollback
+    - Build one version-pinned appliance image and one root Railway configuration running Ion, ion-computer, and pinned ONLYOFFICE under one supervisor with exactly one public Ion port and no privileged runtime requirement
+    - Configure authenticated loopback component channels, generated or sealed internal secrets, write-only provider references, explicit internal ports, public origin policy, and optional in-process HNSW
+    - Add one /data volume with namespaced Ion data, optional Personal workspace, appliance state, non-root ownership, start-time migrations, capacity checks, backups, export, restore, and redeploy-downtime guidance
+    - Add aggregate and component liveness, readiness, compatibility, migration, usable-desktop monitoring, ordered shutdown, restart, rollback, single-writer, serverless-sleep, and unavailable reconciliation
     - Add Railway-compatible bounded WebSocket reconnect and replay plus declared CPU, memory, storage, egress, idle, and cost projections before persistent compute
     - Test a fresh template locally and, only with explicit authorization, on Railway through ready or specific unavailable onboarding, rollback, restart, export, and non-lock-in migration
     - _Requirements: 64.1-64.8, 65.1-65.2, 65.7-65.8_
@@ -590,15 +590,15 @@
 ## Phase 18 — Office Studio
 
 - [ ] 18. Encrypted Agent-Native Office Studio with ONLYOFFICE Editing
-  - [ ] 18.1 Office Studio: models, engine contract, storage, API, proxy, UI, deployment, and test source
+  - [-] 18.1 Office Studio: models, engine contract, storage, API, proxy, UI, deployment, and test source
     - Implement Office domain models, encrypted SQLite store, version service, and bundled OOXML templates
     - Implement OfficeEngine contract, ONLYOFFICE adapter, signed file URLs, callback validation, and reconciliation
     - Implement authenticated Office HTTP handlers, same-origin reverse proxy, and control-plane operations
     - Add agent tools with bounded inspection, proposal types, and verified artifact registration
     - Build Office Studio route with library, real editor host, and honest failure states
-    - Add Compose, Railway, Kubernetes, and Helm packaging with pinned images and private networking
+    - Add Compose, Kubernetes, and Helm packaging with pinned images and build the root Dockerfile and root railway.toml for one supervised Railway service containing Ion, ion-computer, and pinned ONLYOFFICE
     - Add documentation, generated docs, and complete test source without executing tests
-    - Verify static builds and typechecks only; leave task in_progress because live tests are prohibited
+    - Verify source, root image, one-container startup, aggregate readiness, real Computer visibility, and Office edit/save/reopen; leave task in_progress until authorized live Railway acceptance proves the production service
     - _Requirements: 68.1-68.12_
 
 ## Task Dependency Graph

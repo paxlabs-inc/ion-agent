@@ -73,20 +73,13 @@ helm install ion deploy/helm/ion \
 
 ## Railway variables
 
-For a Railway service or template, define `ION_AUTH_USERNAME` and
-`ION_AUTH_PASSWORD` as deployment variables, seal the password, and set
-`ION_WEB_ORIGIN` to `https://${{RAILWAY_PUBLIC_DOMAIN}}`. Railway's injected
-environment identifiers make Ion fail closed if authentication is absent.
-Template authors should use a generated value for the password rather than a
-literal default. The variables are runtime inputs only; they are never compiled
-into the web bundle.
-
-Office Studio on Railway requires a second private ONLYOFFICE service plus
-`ION_OFFICE_ENABLED=true`, `ION_OFFICE_INTERNAL_URL`,
-`ION_OFFICE_CALLBACK_ORIGIN`, and one shared sealed
-`ION_OFFICE_JWT_SECRET`. ONLYOFFICE must not receive a public TCP route. The
-callback origin remains Ion's public HTTPS origin so the engine can fetch
-short-lived source URLs and send signed save callbacks.
+Railway uses the root `Dockerfile` and root `railway.toml` to run Ion, Ion
+Computer, and ONLYOFFICE as one service. Attach one volume at `/data` and define
+`ION_AUTH_USERNAME`, one of `ION_AUTH_PASSWORD` or
+`ION_AUTH_PASSWORD_HASH`, and a base64-encoded 32-byte `ION_VAULT_KEK` as
+protected variables. The appliance derives `ION_WEB_ORIGIN` from
+`RAILWAY_PUBLIC_DOMAIN` and generates its internal Computer and Office
+credentials. See [`deploy/railway`](railway/) for the complete setup.
 
 ## Operator responsibilities
 

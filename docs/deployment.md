@@ -57,13 +57,22 @@ See [deploy/helm/ion](../deploy/helm/ion/).
 Run Ion as a hardened systemd service and put a reverse proxy in front for TLS.
 See [deploy/systemd](../deploy/systemd/).
 
+## Railway
+
+Railway builds the root `Dockerfile` and reads the root `railway.toml`. One
+service and one `/data` volume run Ion, Ion Computer, Chromium, and ONLYOFFICE.
+Railway terminates TLS at the public domain and forwards to the appliance
+ingress on its injected `PORT`; every component endpoint remains internal.
+
+See [deploy/railway](../deploy/railway/).
+
 ## Local development stack
 
-For a non-TLS local stack on Linux, use host networking:
+For a non-TLS local appliance:
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
-# open http://127.0.0.1:4174
+# open http://127.0.0.1:8080
 ```
 
 See [docker/README.md](../docker/README.md).

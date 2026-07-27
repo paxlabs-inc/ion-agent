@@ -7,9 +7,9 @@ on:
   pull_request:
     branches: [master, main]
     paths:
-      - "docker/**"
-      - "packaging/privatecomputer/**"
-      - "deploy/railway/**"
+      - "Dockerfile"
+      - "railway.toml"
+      - "packaging/**"
       - "assets/**"
       - "cmd/**"
       - "internal/**"
@@ -26,23 +26,11 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.service }}
+    name: Build appliance
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: ion
-            image: ion-agent
-            dockerfile: docker/Dockerfile
-            platforms: linux/amd64,linux/arm64
-          - service: ion-computer
-            image: ion-computer
-            dockerfile: packaging/privatecomputer/Dockerfile
-            platforms: linux/amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,7 +53,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ion-agent
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -78,12 +66,12 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
+          file: Dockerfile
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          cache-from: type=gha,scope=ion-appliance
+          cache-to: type=gha,mode=max,scope=ion-appliance
           provenance: true
           sbom: true

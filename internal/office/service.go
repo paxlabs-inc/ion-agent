@@ -32,6 +32,7 @@ type Config struct {
 	JWTSecret      string
 	PublicPath     string
 	CallbackOrigin string
+	PublicOrigin   string
 	MaxFileBytes   int64
 	MaxVersions    int
 	Cipher         Cipher
@@ -51,6 +52,7 @@ type Service struct {
 	callbackOrigin string
 	jwtSecret      string
 	publicPath     string
+	publicOrigin   *url.URL
 	httpClient     *http.Client
 	versionMu      sync.Mutex
 }
@@ -110,6 +112,7 @@ func Open(ctx context.Context, config Config) (*Service, error) {
 		httpClient = &http.Client{Timeout: 5 * time.Minute}
 	}
 	callbackOrigin := strings.TrimRight(strings.TrimSpace(config.CallbackOrigin), "/")
+	var publicOrigin *url.URL
 	if config.EngineURL != "" {
 		parsed, parseErr := url.Parse(callbackOrigin)
 		if parseErr != nil || parsed.Scheme == "" || parsed.Host == "" ||
@@ -127,6 +130,17 @@ func Open(ctx context.Context, config Config) (*Service, error) {
 			_ = store.Close()
 			return nil, fmt.Errorf("office: JWT secret must contain at least 32 bytes")
 		}
+		if value := strings.TrimSpace(config.PublicOrigin); value != "" {
+			publicOrigin, err = url.Parse(value)
+			if err != nil || publicOrigin.User != nil ||
+				(publicOrigin.Scheme != "http" && publicOrigin.Scheme != "https") ||
+				publicOrigin.Host == "" ||
+				(publicOrigin.Path != "" && publicOrigin.Path != "/") ||
+				publicOrigin.RawQuery != "" || publicOrigin.Fragment != "" {
+				_ = store.Close()
+				return nil, fmt.Errorf("office: public origin is invalid")
+			}
+		}
 	}
 
 	svc := &Service{
@@ -139,6 +153,7 @@ func Open(ctx context.Context, config Config) (*Service, error) {
 		callbackOrigin: callbackOrigin,
 		jwtSecret:      config.JWTSecret,
 		publicPath:     publicPath,
+		publicOrigin:   publicOrigin,
 		httpClient:     httpClient,
 	}
 

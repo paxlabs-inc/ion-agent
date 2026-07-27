@@ -670,14 +670,14 @@ ac_7  = "STREAM transport SHALL be bounded, reconnectable, and replaceable witho
 ac_8  = "A real-client journey SHALL prove authenticated viewing, mobile and keyboard use, needs-help takeover, one operator interaction, lease renewal and expiry, no concurrent executor input, protected secret entry, return-control reconciliation, reconnect, restart, and semantic-event continuity."
 
 [req.64]
-title = "Railway one-click Private Computer deployment"
-story = "As a new operator, I want to deploy Ion and its private computer in one Railway template, so that onboarding reaches a truthful ready or unavailable state without exposing the computer daemon or locking my data to Railway."
-ac_1  = "THE release SHALL provide reproducible version-pinned Ion and ion-computer images and a multi-service Railway template with only Ion publicly exposed; ion-computer SHALL use authenticated private service networking and an optional HNSW sidecar SHALL exist only when enabled."
-ac_2  = "THE Ion data and optional Personal workspace volumes SHALL have explicit mount paths, ownership repair for non-root processes, schemas, migrations, capacity checks, backup and restore instructions, export format, and documented redeploy downtime; volume-dependent migration SHALL run at service start because Railway does not mount volumes during build or pre-deploy."
+title = "Railway one-click single-service appliance deployment"
+story = "As a new operator, I want to deploy the complete Ion appliance as one Railway service, so that Ion, its private computer, and Office Studio reach a truthful ready or unavailable state without extra service setup or Railway-only data formats."
+ac_1  = "THE release SHALL provide one reproducible version-pinned Ion appliance image and one Railway service running Ion, ion-computer, and the pinned ONLYOFFICE engine in one supervised container; exactly one public port SHALL terminate at Ion while component ports remain container-internal and are never published by Railway."
+ac_2  = "THE appliance SHALL use one Railway volume mounted at /data with explicit namespaced Ion, Personal workspace, and appliance-state paths, ownership repair for non-root child processes, schemas, migrations, capacity checks, backup and restore instructions, export format, and documented redeploy downtime; volume-dependent migration SHALL run at service start because Railway does not mount volumes during build or pre-deploy."
 ac_3  = "TEMPLATE variables SHALL use generated or sealed write-only secrets and service references for private host and port values; provider keys, installation keys, session credentials, and desktop tickets SHALL never enter client bundles, template defaults, logs, diagnostics, or model context."
-ac_4  = "ION and ion-computer SHALL expose distinct liveness, readiness, compatibility, and migration state; deployment health checks SHALL gate activation while continuous application monitoring and reconciliation SHALL detect later failure."
-ac_5  = "PUBLIC streaming SHALL support Railway HTTP/1.1 WebSockets with bounded frames, exponential-backoff reconnect before the current request-duration ceiling, replay cursors, and origin checks; the private channel SHALL bind dual-stack and use the service's railway.internal DNS name and explicit port."
-ac_6  = "RESTART, rollback, and image incompatibility SHALL preserve authoritative encrypted state, prevent two writers from sharing one volume, reconcile in-flight sessions and leases, and surface unavailable rather than silently starting an incompatible or unauthenticated desktop."
+ac_4  = "THE appliance SHALL expose one aggregate liveness and readiness endpoint while retaining distinct Ion, ion-computer, ONLYOFFICE, compatibility, migration, and usable-desktop state internally; the Railway health check SHALL gate public activation while continuous supervision and reconciliation detect later child failure."
+ac_5  = "PUBLIC streaming SHALL support Railway HTTP/1.1 WebSockets with bounded frames, exponential-backoff reconnect before the current request-duration ceiling, replay cursors, and origin checks; ion-computer and ONLYOFFICE traffic SHALL use authenticated loopback endpoints and SHALL never bind a public control port."
+ac_6  = "RESTART, rollback, child-process failure, and image incompatibility SHALL preserve authoritative encrypted state, prevent two writers from sharing the one volume, reconcile in-flight sessions, document saves, and leases, and surface unavailable rather than silently starting an incompatible or unauthenticated component."
 ac_7  = "ONBOARDING SHALL present declared CPU, memory, storage, egress, idle, and cost projections before persistent compute is enabled, SHALL distinguish serverless sleep from stopped or failed, and SHALL reach Computer ready or a specific unavailable reason."
 ac_8  = "THE deployment SHALL support documented export and migration to ordinary container infrastructure without Railway-only state formats, privileged mode, a public control port, or an unauthenticated fallback."
 
@@ -1609,13 +1609,13 @@ reqs   = ["63.2-63.8", "65.2", "65.4-65.5"]
 requires = ["10.2", "14.5", "16.3"]
 
 [task.16.5]
-title  = "Railway one-click packaging, onboarding, health, and rollback"
+title  = "Railway one-click single-service appliance, onboarding, health, and rollback"
 status = "pending"
 wave   = 47
-do_1   = "Build version-pinned Ion and ion-computer images plus a multi-service Railway template with only Ion public and no privileged runtime requirement"
-do_2   = "Configure authenticated dual-stack private networking, generated or sealed secrets, write-only provider references, explicit ports, public origin policy, and optional HNSW"
-do_3   = "Add Ion data and optional Personal workspace volumes with non-root ownership, start-time migrations, capacity checks, backups, export, restore, and redeploy-downtime guidance"
-do_4   = "Add liveness, readiness, compatibility, migration, continuous monitoring, restart, rollback, single-writer, serverless-sleep, and unavailable reconciliation"
+do_1   = "Build one version-pinned appliance image and one root Railway configuration running Ion, ion-computer, and pinned ONLYOFFICE under one supervisor with exactly one public Ion port and no privileged runtime requirement"
+do_2   = "Configure authenticated loopback component channels, generated or sealed internal secrets, write-only provider references, explicit internal ports, public origin policy, and optional in-process HNSW"
+do_3   = "Add one /data volume with namespaced Ion data, optional Personal workspace, appliance state, non-root ownership, start-time migrations, capacity checks, backups, export, restore, and redeploy-downtime guidance"
+do_4   = "Add aggregate and component liveness, readiness, compatibility, migration, usable-desktop monitoring, ordered shutdown, restart, rollback, single-writer, serverless-sleep, and unavailable reconciliation"
 do_5   = "Add Railway-compatible bounded WebSocket reconnect and replay plus declared CPU, memory, storage, egress, idle, and cost projections before persistent compute"
 do_6   = "Test a fresh template locally and, only with explicit authorization, on Railway through ready or specific unavailable onboarding, rollback, restart, export, and non-lock-in migration"
 reqs   = ["64.1-64.8", "65.1-65.2", "65.7-65.8"]
@@ -1676,7 +1676,7 @@ ac_5  = "Save callbacks are bounded, authenticated, idempotent and restart-safe;
 ac_6  = "Imports and exports validate supported extensions, MIME signatures, OOXML archive structure, decompression bounds, macros, embedded content and maximum sizes; macro-enabled or dangerous documents are quarantined or opened read-only."
 ac_7  = "Agent office operations preserve the same Ion identity, memory, task, approval, evidence and artifact boundaries; selected content is sent only by explicit user action and proposed document mutations remain reviewable."
 ac_8  = "THE editor is mounted through a same-origin WebSocket-capable proxy or another explicitly configured secure origin; direct unauthenticated document-server exposure and arbitrary proxy targets are prohibited."
-ac_9  = "COMPOSE, Railway, Kubernetes and Helm packaging use a pinned configurable ONLYOFFICE image, private networking, sealed JWT secret, health checks, persistent operational storage, graceful save/disconnect behavior and documented resource requirements."
+ac_9  = "COMPOSE, Kubernetes and Helm packaging use a pinned configurable ONLYOFFICE image, while Railway packages that pinned engine inside the single Ion appliance service; every target uses sealed JWT authentication, non-public engine access, health checks, durable canonical Ion versions, graceful save/disconnect behavior and documented resource requirements."
 ac_10 = "COMMUNITY branding, AGPL obligations, connection limits and unavailable commercial features remain visible; the domain must support later Developer or hosted engines without data migration."
 ac_11 = "PRODUCTION acceptance covers real DOCX, XLSX, PPTX and PDF journeys, JWT/origin/CSRF denial, cross-actor isolation, callback replay, restart, WebSocket reconnect, malicious files, version restore, backup, export and artifact verification."
 ac_12 = "NO Office task is marked complete from source presence, an iframe rendering, HTTP 200, simulated callbacks, screenshots or model claims."
@@ -1688,15 +1688,15 @@ status  = "pending"
 
 [task.18.1]
 title  = "Office Studio: models, engine contract, storage, API, proxy, UI, deployment, and test source"
-status = "pending"
+status = "in_progress"
 wave   = 35
 do_1   = "Implement Office domain models, encrypted SQLite store, version service, and bundled OOXML templates"
 do_2   = "Implement OfficeEngine contract, ONLYOFFICE adapter, signed file URLs, callback validation, and reconciliation"
 do_3   = "Implement authenticated Office HTTP handlers, same-origin reverse proxy, and control-plane operations"
 do_4   = "Add agent tools with bounded inspection, proposal types, and verified artifact registration"
 do_5   = "Build Office Studio route with library, real editor host, and honest failure states"
-do_6   = "Add Compose, Railway, Kubernetes, and Helm packaging with pinned images and private networking"
+do_6   = "Add Compose, Kubernetes, and Helm packaging with pinned images and build the root Dockerfile and root railway.toml for one supervised Railway service containing Ion, ion-computer, and pinned ONLYOFFICE"
 do_7   = "Add documentation, generated docs, and complete test source without executing tests"
-do_8   = "Verify static builds and typechecks only; leave task in_progress because live tests are prohibited"
+do_8   = "Verify source, root image, one-container startup, aggregate readiness, real Computer visibility, and Office edit/save/reopen; leave task in_progress until authorized live Railway acceptance proves the production service"
 reqs   = ["68.1-68.12"]
 requires = ["1.2", "9.2", "13.1", "14.3"]

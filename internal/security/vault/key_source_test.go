@@ -3,11 +3,48 @@ package vault
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestDeploymentKEKSourceConsumesValidatedKey(t *testing.T) {
+	t.Parallel()
+	key := bytes.Repeat([]byte{0x2a}, KeySize)
+	source, err := NewDeploymentKEKSource(base64.RawStdEncoding.EncodeToString(key))
+	if err != nil {
+		t.Fatalf("NewDeploymentKEKSource() error = %v", err)
+	}
+	loaded, err := source.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !bytes.Equal(loaded, key) {
+		t.Fatal("Load() returned a different key")
+	}
+	if _, err := source.Load(context.Background()); !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("second Load() error = %v, want ErrKeyNotFound", err)
+	}
+	if err := source.Store(context.Background(), key); err == nil {
+		t.Fatal("Store() succeeded for a read-only deployment source")
+	}
+}
+
+func TestDeploymentKEKSourceRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
+	values := []string{
+		"",
+		"not-base64",
+		base64.StdEncoding.EncodeToString([]byte("short")),
+	}
+	for _, encoded := range values {
+		if _, err := NewDeploymentKEKSource(encoded); err == nil {
+			t.Fatalf("NewDeploymentKEKSource(%q) succeeded", encoded)
+		}
+	}
+}
 
 func TestFileKEKSourceRoundTripAndPermissions(t *testing.T) {
 	t.Parallel()

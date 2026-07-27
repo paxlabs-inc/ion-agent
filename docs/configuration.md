@@ -51,12 +51,14 @@ browser origin is configured without authentication. Credentials must be
 stored as protected or sealed deployment variables and must never be committed
 to an environment file.
 
-Container-only variables consumed by [`docker/entrypoint.sh`](../docker/entrypoint.sh):
+Container-only variables consumed by the root appliance image:
 
 | Variable | Default | Description |
 |---|---|---|
-| `ION_AUTO_INIT` | `0` | When `1`, initialize the data directory on first run if empty. |
+| `ION_AUTO_INIT` | `1` | Initialize the data directory on first run when it has no wrapped User Key. |
 | `ION_DEV_FILE_KEK` | `0` | When `1`, initialize with the development file KEK. |
+| `ION_VAULT_KEK` | none | Base64-encoded 32-byte production KEK supplied as a protected deployment variable. |
+| `ION_APPLIANCE_DATA_ROOT` | `/data` | Root for Ion, Computer, and appliance state in the single mounted volume. |
 
 ## The data directory
 
@@ -71,10 +73,12 @@ permissions (the container and systemd unit use mode `0700`).
 
 ## The key source
 
-Ion derives its vault keys from a protected host key source. On systems without
-a supported source, the development file KEK is an explicit, opt-in fallback for
-development only. Do not deploy the file KEK to production. See
-[SECURITY.md](../SECURITY.md) for the key hierarchy.
+Ion derives its vault keys from a protected host key source. The Railway
+appliance consumes `ION_VAULT_KEK` from a protected deployment variable and
+never writes that value to `/data`. On systems without a supported source, the
+development file KEK is an explicit, opt-in fallback for development only. Do
+not deploy the file KEK to production. See [SECURITY.md](../SECURITY.md) for the
+key hierarchy.
 
 ## Networking
 

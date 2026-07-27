@@ -21,7 +21,7 @@ Requirements: Go 1.26.5, Node.js 22.22+, npm 11, and (for the sidecar) Rust
 ## Docker
 
 ```bash
-docker build -f docker/Dockerfile -t ion:local .
+docker build -t ion:local .
 ```
 
 Or run the local stack:
@@ -30,8 +30,8 @@ Or run the local stack:
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-See [docker/README.md](../docker/README.md). Note that Ion serves plain HTTP on
-loopback only, which is why the local stack uses host networking.
+The root image contains Ion, Ion Computer, and ONLYOFFICE. See
+[docker/README.md](../docker/README.md).
 
 ## Kubernetes and Helm
 

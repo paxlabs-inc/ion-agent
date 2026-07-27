@@ -72,7 +72,7 @@
     "name": "react"
   },
   "index.html": {
-    "file": "assets/index-6l0CY_2w.js",
+    "file": "assets/index-Cn2FRV6Y.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -83,7 +83,7 @@
       "src/features/computer/ComputerStage.tsx"
     ],
     "css": [
-      "assets/index-DVTvM27M.css"
+      "assets/index-60zBDUGB.css"
     ],
     "assets": [
       "assets/Wide620x300Logo-rrWsWjpD.png",
@@ -106,7 +106,7 @@
     ]
   },
   "src/features/computer/ComputerStage.tsx": {
-    "file": "assets/ComputerStage-BFiVYsCN.js",
+    "file": "assets/ComputerStage-Ck_0Ypr4.js",
     "name": "ComputerStage",
     "src": "src/features/computer/ComputerStage.tsx",
     "isDynamicEntry": true,

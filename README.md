@@ -146,12 +146,13 @@ The fastest way to try Ion locally. The operator is loopback-only by default.
 git clone https://github.com/paxlabs-inc/ion-agent.git
 cd ion-agent
 
-# Build the image and start the web operator on http://127.0.0.1:4174
+# Build the complete appliance and start its single ingress on port 8080
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Open <http://127.0.0.1:4174>. See [docker/README.md](docker/README.md) for image
-variants, volumes, and environment variables.
+Open <http://127.0.0.1:8080>. The one image contains Ion, Ion Computer,
+Chromium, and ONLYOFFICE. See [docker/README.md](docker/README.md) for its
+volume and environment variables.
 
 ### Build from source
 
@@ -229,6 +230,7 @@ environment variables. The most common knobs:
 | `--listen` / `ION_WEB_LISTEN` | `127.0.0.1:4174` | Web operator listen address. Bind to loopback only. |
 | `--origin` / `ION_WEB_ORIGIN` | listen URL | Exact public browser origin for remote TLS deployments. |
 | `ION_AUTH_USERNAME` + one password variable | unset | Required operator login for remote and Railway deployments. |
+| `ION_VAULT_KEK` | unset | Base64-encoded 32-byte vault KEK for the Railway appliance. |
 | `--dev-file-kek` | off | Development-only file KEK. Never use in production. |
 
 See [docs/configuration.md](docs/configuration.md) for the complete reference.
@@ -243,6 +245,8 @@ Ion ships production-oriented deployment assets under [`deploy/`](deploy/):
   (namespace, deployment, service, config, ingress) with a Kustomize base.
 - **Helm** — [`deploy/helm/ion/`](deploy/helm/ion/) chart for parameterized
   installs.
+- **Railway** — the root [`Dockerfile`](Dockerfile) and
+  [`railway.toml`](railway.toml) run the complete appliance as one service.
 - **systemd** — [`deploy/systemd/`](deploy/systemd/) unit for bare-metal hosts.
 
 Read [docs/deployment.md](docs/deployment.md) and [deploy/README.md](deploy/README.md)
@@ -253,6 +257,8 @@ egress controls are operator responsibilities.
 
 ```text
 cmd/ion/                 CLI and runtime entry point
+cmd/ion-appliance/       single-service container supervisor and ingress
+cmd/ion-computer/        private graphical Computer host
 cmd/ion-web-e2e/         build-tagged browser acceptance helper
 internal/agent/          provider/tool turn loop
 internal/controlplane/   generated client contract and transports

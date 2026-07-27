@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+export CHROME_DEVEL_SANDBOX=/opt/ion/chromium/chrome-sandbox
+export LD_LIBRARY_PATH="/opt/ion/chromium-libs${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+exec /opt/ion/chromium/chromium "$@"

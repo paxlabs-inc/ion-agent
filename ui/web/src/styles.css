@@ -7162,6 +7162,15 @@ code {
   background: var(--surface-subtle);
 }
 
+.office-editor-shell > .office-notice[hidden] {
+  height: 0;
+  min-height: 0;
+  display: block;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
+}
+
 .office-create-panel,
 .office-library,
 .office-empty-state {
